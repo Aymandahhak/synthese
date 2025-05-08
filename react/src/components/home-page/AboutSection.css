@@ -1,0 +1,341 @@
+.about-section {
+    padding: 80px 0;
+    background-color: #f5f5f7;
+}
+
+.smart-home-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    background-color: #f5f5f7;
+    border-radius: 24px;
+}
+
+@media (min-width: 992px) {
+    .smart-home-container {
+        flex-direction: row;
+    }
+}
+
+.smart-home-main {
+    flex: 2;
+    background-color: white;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.smart-home-header {
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #f0f0f3;
+}
+
+.status-indicator {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+}
+
+.status-indicator::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background-color: #ff5656;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+.smart-home-stats {
+    display: flex;
+    gap: 12px;
+}
+
+.stat-item {
+    background-color: #f8f8f9;
+    padding: 6px 12px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #555;
+}
+
+.smart-home-preview {
+    width: 100%;
+    height: 380px;
+    position: relative;
+}
+
+.room-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.smart-home-sidebar {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.rooms-section {
+    background-color: white;
+    border-radius: 24px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.rooms-section h3 {
+    margin: 0 0 16px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+}
+
+.rooms-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.room-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.room-item:hover {
+    background-color: #f8f8f9;
+}
+
+.room-item.active {
+    background-color: #f0f0f3;
+}
+
+.room-icon {
+    margin-right: 10px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    background-color: #f8f8f9;
+    border-radius: 50%;
+}
+
+.room-info {
+    flex: 1;
+}
+
+.room-info h4 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.room-info p {
+    margin: 4px 0 0 0;
+    font-size: 12px;
+    color: #888;
+}
+
+.room-arrow {
+    font-size: 20px;
+    color: #bbb;
+}
+
+.add-room-btn {
+    width: 100%;
+    padding: 12px;
+    margin-top: 16px;
+    border: none;
+    background-color: #111;
+    color: white;
+    font-weight: 500;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.add-room-btn:hover {
+    background-color: #333;
+}
+
+.smart-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.control-section {
+    background-color: white;
+    border-radius: 24px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.control-section h3 {
+    margin: 0 0 16px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+}
+
+.device-control {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.device-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #555;
+}
+
+.device-icon {
+    font-size: 18px;
+}
+
+/* Toggle Switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+}
+
+input:checked + .slider {
+    background-color: #111;
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px #111;
+}
+
+input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+.slider.round {
+    border-radius: 34px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+/* Music player styles */
+.music-player {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.now-playing {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+    color: #555;
+}
+
+.track-time {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #888;
+}
+
+.album-art {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid #f0f0f3;
+}
+
+.album-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.player-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.player-controls button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #555;
+    transition: all 0.2s;
+}
+
+.player-controls button:hover {
+    color: #111;
+}
+
+.play-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #111 !important;
+    color: white !important;
+    border-radius: 50%;
+}
+
+.play-btn:hover {
+    background-color: #333 !important;
+}

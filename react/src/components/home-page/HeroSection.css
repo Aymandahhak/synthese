@@ -1,0 +1,40 @@
+.hero-section {
+    background-color: #e9ecef; /* Light background for hero */
+    padding: 60px 20px;
+    text-align: center;
+    min-height: 30vh; /* Adjust height as needed */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.hero-content h1 {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+    color: #343a40;
+}
+
+.hero-content p {
+    font-size: 1.2rem;
+    color: #6c757d;
+    margin-bottom: 25px;
+    max-width: 600px; /* Limit paragraph width */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Optional CTA button styling */
+.cta-button {
+    padding: 12px 25px;
+    font-size: 1.1rem;
+    color: #fff;
+    background-color: #007bff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.cta-button:hover {
+    background-color: #0056b3;
+} 

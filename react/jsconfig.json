@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      // Match Vite config: @ points to src
+      "@/*": ["src/*"],
+      // Add lib alias if it's outside src and defined in vite.config.js
+      "lib/*": ["lib/*"]
+    }
+  },
+  // Update include to reflect structure, src covers most things now
+  "include": [
+    "src/**/*", // Include everything under src
+    "lib/**/*", // Include lib if outside src
+    "components/**/*", // Keep if components is outside src
+    "app/**/*" // Keep if app is outside src
+    // Add other top-level directories containing JS/JSX if needed
+  ],
+  "exclude": ["node_modules", "dist"] // Add dist or build output folder
+}
