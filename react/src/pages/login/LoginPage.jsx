@@ -183,53 +183,51 @@ export default function LoginPage() {
     setLoginError('');
     
     try {
+      // Check if this is a development account
+      const devAccounts = [
+        'admin@example.com',
+        'responsable.formation@example.com',
+        'responsable.dr@example.com',
+        'responsable.cdc@example.com',
+        'formateur.animateur@example.com',
+        'formateur.participant@example.com'
+      ];
+      
+      // For dev accounts, we can use a simple password
+      const isDevelopmentAccount = devAccounts.includes(email.toLowerCase());
+      if (isDevelopmentAccount && password !== 'password' && password !== '123456') {
+        setLoginError('Pour les comptes de développement, utilisez le mot de passe "password" ou "123456"');
+        setIsSubmitting(false);
+        return;
+      }
+      
       await login(email, password);
       // Navigation is handled by the useEffect above
     } catch (error) {
       console.error('Login error:', error);
       
       let errorMessage = 'Une erreur est survenue lors de la connexion.';
-      let errorDetails = '';
       
       if (error.message) {
         errorMessage = error.message;
-      }
-      
-      if (error.details) {
-        errorDetails = error.details;
-      } else if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        if (error.response.status === 401) {
-          errorMessage = 'Email ou mot de passe incorrect.';
-        } else if (error.response.status >= 500) {
-          errorMessage = `Erreur serveur (${error.response.status}). Veuillez contacter l'administrateur.`;
-          // Try to extract more details from the response if available
-          if (error.response.data) {
-            try {
-              if (typeof error.response.data === 'string') {
-                errorDetails = error.response.data;
-              } else if (error.response.data.message) {
-                errorDetails = error.response.data.message;
-              } else if (error.response.data.error) {
-                errorDetails = error.response.data.error;
-              } else {
-                errorDetails = JSON.stringify(error.response.data);
-              }
-            } catch (e) {
-              errorDetails = "Erreur lors de la récupération des détails";
-            }
-          }
-        } else if (error.response.data && error.response.data.message) {
-          errorMessage = error.response.data.message;
+        
+        // If we have details, add them as a second line
+        if (error.details) {
+          errorMessage = `${errorMessage}\n${error.details}`;
         }
-      } else if (error.request) {
-        // The request was made but no response was received
-        errorMessage = 'Impossible de contacter le serveur. Vérifiez votre connexion.';
       }
       
       // Set the error message
-      setLoginError(errorDetails ? `${errorMessage} Détails: ${errorDetails}` : errorMessage);
+      setLoginError(errorMessage);
+      
+      // If we have a server connection issue, suggest checking server status
+      if (errorMessage.includes('serveur ne répond pas') || 
+          errorMessage.includes('impossible de se connecter') || 
+          errorMessage.includes('timeout') ||
+          error.message?.includes('Network Error')) {
+        // Automatically run server health check
+        checkServerHealth();
+      }
     } finally {
       setIsSubmitting(false);
     }

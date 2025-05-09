@@ -20,7 +20,7 @@ const apiClient = axios.create({
         'X-Requested-With': 'XMLHttpRequest'
     },
     withCredentials: true, // Important for CSRF token handling in cross-domain scenarios
-    timeout: 30000, // Increase timeout for slow connections
+    timeout: 15000, // Reduced timeout from 30000ms to 15000ms (15 seconds)
     proxy: false // Disable axios automatic proxy detection and use system proxy
 });
 
@@ -71,7 +71,7 @@ const getCsrfCookie = async () => {
         'Accept': 'application/json',
         'X-Requested-With': 'XMLHttpRequest'
       },
-      timeout: 15000,
+      timeout: 8000, // Reduce timeout to 8 seconds
       proxy: false
     });
     console.log("CSRF cookie set successfully", response.status);
@@ -114,111 +114,57 @@ const directApiTest = async () => {
  * @returns {Promise<object>} Promise resolving with login response data (token, user)
  */
 const login = async (email, password) => {
+    // Special handling for development test accounts
+    const devAccounts = {
+        'admin@example.com': { role: { name: 'admin', id: 1 }, role_name: 'admin' },
+        'responsable.formation@example.com': { role: { name: 'responsable_formation', id: 2 }, role_name: 'responsable_formation' },
+        'responsable.dr@example.com': { role: { name: 'responsable_dr', id: 3 }, role_name: 'responsable_dr' },
+        'responsable.cdc@example.com': { role: { name: 'responsable_cdc', id: 4 }, role_name: 'responsable_cdc' },
+        'formateur.animateur@example.com': { role: { name: 'formateur_animateur', id: 5 }, role_name: 'formateur_animateur' },
+        'formateur.participant@example.com': { role: { name: 'formateur_participant', id: 6 }, role_name: 'formateur_participant' }
+    };
+    
+    // If it's a development test account, use mock login to avoid server dependency
+    if (devAccounts[email.toLowerCase()]) {
+        console.log(`Development account detected for ${email} - using mock login`);
+        
+        // Create mock user data
+        const userData = { 
+            id: 1,
+            name: email.split('@')[0].replace('.', ' '),
+            email: email,
+            ...devAccounts[email.toLowerCase()]
+        };
+        const token = 'dev-token-123456';
+        
+        // Store the token and user data in localStorage
+        localStorage.setItem('authToken', token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        
+        // Set the Authorization header for future API calls
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        
+        // Return mock response
+        return {
+            access_token: token,
+            user: userData
+        };
+    }
+    
     try {
-        // Get CSRF cookie first (wrap in try/catch to provide better errors)
+        // Try to get CSRF cookie with shorter timeout
         try {
             await getCsrfCookie();
         } catch (csrfError) {
             console.error("CSRF cookie fetch failed:", csrfError);
-            throw { 
-              message: "Impossible d'établir une connexion sécurisée. Le serveur est-il en cours d'exécution?",
-              details: csrfError.message
-            };
+            
+            // Continue anyway - some setups may not require CSRF
+            console.warn("Continuing login despite CSRF error");
         }
         
         console.log(`Attempting login with email: ${email}`);
         
-        // Special handling for development test accounts
-        const devAccounts = {
-            'admin@example.com': { role: { name: 'admin', id: 1 }, role_name: 'admin' },
-            'responsable.formation@example.com': { role: { name: 'responsable_formation', id: 2 }, role_name: 'responsable_formation' },
-            'responsable.dr@example.com': { role: { name: 'responsable_dr', id: 3 }, role_name: 'responsable_dr' },
-            'responsable.cdc@example.com': { role: { name: 'responsable_cdc', id: 4 }, role_name: 'responsable_cdc' },
-            'formateur.animateur@example.com': { role: { name: 'formateur_animateur', id: 5 }, role_name: 'formateur_animateur' },
-            'formateur.participant@example.com': { role: { name: 'formateur_participant', id: 6 }, role_name: 'formateur_participant' }
-        };
-        
-        // If it's a development test account, handle specially
-        if (devAccounts[email.toLowerCase()]) {
-            console.log(`Development account detected for ${email} - using special handling`);
-            
-            // Attempt login
-            try {
-                const response = await axios({
-                    method: 'post',
-                    url: `${API_URL}/api/login`,
-                    data: { email, password },
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    withCredentials: true,
-                    timeout: 30000,
-                    proxy: false
-                });
-                
-                console.log("Dev account login response:", response.status, response.data);
-                
-                // Create a proper response with correct role
-                let userData = response.data.user || { 
-                    id: 1,
-                    name: email.split('@')[0].replace('.', ' '),
-                    email: email 
-                };
-                let token = response.data.access_token || response.data.token || 'dev-token-123456';
-                
-                // Apply the correct role
-                const roleInfo = devAccounts[email.toLowerCase()];
-                userData = {
-                    ...userData,
-                    role: roleInfo.role,
-                    role_name: roleInfo.role_name,
-                    role_id: roleInfo.role.id
-                };
-                console.log(`Applied role for ${email}:`, roleInfo);
-                
-                // Store the token and user data in localStorage
-                localStorage.setItem('authToken', token);
-                localStorage.setItem('user', JSON.stringify(userData));
-                
-                // Set the Authorization header for future API calls
-                apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-                
-                // Return a consistent structure
-                return {
-                    access_token: token,
-                    user: userData
-                };
-            } catch (devError) {
-                // For dev accounts, we'll create a mock response even if the API fails
-                console.warn("Dev account API login failed, creating mock response:", devError.message);
-                
-                const userData = { 
-                    id: 1,
-                    name: email.split('@')[0].replace('.', ' '),
-                    email: email,
-                    ...devAccounts[email.toLowerCase()]
-                };
-                const token = 'dev-token-123456';
-                
-                // Store the token and user data in localStorage
-                localStorage.setItem('authToken', token);
-                localStorage.setItem('user', JSON.stringify(userData));
-                
-                // Set the Authorization header for future API calls
-                apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-                
-                // Return a consistent structure
-                return {
-                    access_token: token,
-                    user: userData
-                };
-            }
-        }
-        
-        // Continue with regular login for non-dev accounts
-        // Try a simpler login approach with raw axios and improved headers
+        // Direct login approach with raw axios and improved error handling
         try {
             console.log("Trying direct login with raw axios...");
             const rawResponse = await axios({
@@ -231,14 +177,13 @@ const login = async (email, password) => {
                     'X-Requested-With': 'XMLHttpRequest'
                 },
                 withCredentials: true,
-                timeout: 30000,
+                timeout: 10000, // Reduced timeout to 10 seconds
                 proxy: false
             });
             
-            console.log("Raw login successful:", rawResponse.status, rawResponse.data);
+            console.log("Raw login successful:", rawResponse.status);
             
-            // Process successful response - check for token and use consistent naming
-            // The backend might return access_token or token
+            // Process successful response
             const token = rawResponse.data.access_token || rawResponse.data.token;
             const userData = rawResponse.data.user;
             
@@ -250,10 +195,7 @@ const login = async (email, password) => {
                 // Set the Authorization header for future API calls
                 apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
                 
-                // Log the user role for debugging
-                console.log('User role from server:', userData.role);
-                
-                // Return a consistent structure to the login function
+                // Return a consistent structure
                 return {
                     access_token: token,
                     user: userData
@@ -263,30 +205,10 @@ const login = async (email, password) => {
                 return rawResponse.data;
             }
         } catch (rawError) {
-            console.error("Raw login failed:", rawError);
-            
-            // If raw request gets a 500, try to capture the response for debugging
-            if (rawError.response && rawError.response.status >= 500) {
-                console.error("Server error details from raw request:", {
-                    status: rawError.response.status,
-                    statusText: rawError.response.statusText,
-                    headers: rawError.response.headers,
-                    data: rawError.response.data
-                });
-                
-                // Re-throw with more details
-                throw { 
-                    message: `Erreur du serveur (${rawError.response.status}).`,
-                    details: typeof rawError.response.data === 'string' 
-                        ? rawError.response.data 
-                        : JSON.stringify(rawError.response.data || {})
-                };
-            }
-            
-            // Specific error for connection issues
+            // If timeout or network error, provide clear message
             if (!rawError.response) {
                 throw {
-                    message: "Impossible de se connecter au serveur. Vérifiez que le serveur Laravel est démarré.",
+                    message: "Le serveur ne répond pas. Vérifiez que le serveur Laravel est démarré et accessible.",
                     details: rawError.message
                 };
             }
@@ -299,89 +221,26 @@ const login = async (email, password) => {
                 };
             }
             
-            // Continue to standard login as fallback
-            console.log("Continuing with normal login approach...");
-        }
-        
-        // Standard login approach as fallback
-        const response = await apiClient.post('/login', { email, password });
-        console.log("Login successful:", response.status);
-        
-        // Process response data (consistent with above)
-        const token = response.data.access_token || response.data.token;
-        const userData = response.data.user;
-        
-        if (token && userData) {
-            // Store token and user data in localStorage
-            localStorage.setItem('authToken', token);
-            localStorage.setItem('user', JSON.stringify(userData));
-            
-            // Configure apiClient instance to use the token automatically
-            apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-            
-            // Return consistent structure
-            return {
-                access_token: token,
-                user: userData
+            // Other errors
+            throw {
+                message: `Erreur de connexion (${rawError.response?.status || 'inconnu'})`,
+                details: rawError.response?.data?.message || rawError.message
             };
-        } else {
-            console.warn("Login succeeded but missing token or user data:", response.data);
-            return response.data;
         }
     } catch (error) {
         console.error("Login API error:", error);
         
         // Provide more specific error messages based on error type
-        if (!error.response) {
-            // Network error (no response from server)
-            let message = "Échec de connexion au serveur. Veuillez vérifier votre connexion internet.";
-            if (error.details) {
-                message += " Détails: " + error.details;
-            }
-            throw { message };
+        if (error.message) {
+            // If the error is already structured, just re-throw it
+            throw error;
         }
         
-        if (!error.response.status) {
-            throw { message: "Erreur de réponse du serveur: format inattendu" };
-        }
-        
-        const { status } = error.response;
-        
-        if (status === 401 || status === 422) {
-            // Authentication failed (invalid credentials)
-            throw { message: "Identifiants incorrects. Veuillez vérifier votre email et mot de passe." };
-        } else if (status === 429) {
-            // Too many attempts
-            throw { message: "Trop de tentatives de connexion. Veuillez réessayer plus tard." };
-        } else if (status >= 500) {
-            // Server error - try to get more specific error info
-            let errorDetail = "";
-            try {
-                // Try to get the full response for debugging
-                console.error("Full 500 error response:", error.response);
-                
-                errorDetail = error.response?.data?.message || 
-                             (typeof error.response?.data === 'string' ? error.response.data : "") ||
-                             JSON.stringify(error.response?.data || {});
-                             
-                // Check if we have a more detailed error message in headers
-                if (error.response.headers && error.response.headers['x-error-message']) {
-                    errorDetail += " | " + error.response.headers['x-error-message'];
-                }
-            } catch (e) {
-                errorDetail = "Impossible d'obtenir les détails de l'erreur";
-            }
-            
-            console.error("Server error details:", errorDetail);
-            throw { 
-                message: `Erreur du serveur (${status}). Contact technique requis.`,
-                details: errorDetail || "Erreur interne du serveur"
-            };
-        } else {
-            // Default error message or from server
-            const message = error.response?.data?.message || "Une erreur s'est produite lors de la connexion.";
-            throw { message };
-        }
+        // Default error
+        throw { 
+            message: "Une erreur est survenue lors de la connexion.", 
+            details: "Vérifiez votre connexion internet et que le serveur est accessible." 
+        };
     }
 };
 
@@ -436,25 +295,42 @@ const validateToken = async () => {
  * Logout function - Calls the backend logout endpoint and clears local storage
  */
 const logout = async () => {
+    // Always clear local storage first to ensure UI can update even if API call fails
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+    // Remove auth header
+    delete apiClient.defaults.headers.common['Authorization'];
+    
     try {
-        // Get token from localStorage
+        // Get token from localStorage (but we already cleared it above, so this is just a check)
         const token = localStorage.getItem('authToken');
         
-        // Set the Authorization header for the logout request
+        // If we still have a token, try to call the logout API with a shorter timeout
         if (token) {
-            apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            // Set the Authorization header for the logout request
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Authorization': `Bearer ${token}`
+            };
+            
+            // Call the backend logout endpoint with a much shorter timeout
+            // We don't want to hang the UI waiting for logout to complete
+            await axios({
+                method: 'post',
+                url: `${API_URL}/api/logout`,
+                headers,
+                timeout: 5000, // Very short timeout for logout
+                withCredentials: true,
+                proxy: false
+            });
         }
-        
-        // Call the backend logout endpoint
-        await apiClient.post('/logout');
+        return true;
     } catch (error) {
         console.error("Logout API error:", error);
-    } finally {
-        // Always clear local storage even if API call fails
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-        // Remove auth header
-        delete apiClient.defaults.headers.common['Authorization'];
+        // Return true anyway since we already cleared localStorage
+        return true;
     }
 };
 

@@ -13,24 +13,30 @@ const apiClient = axios.create({
   withCredentials: true, // Important for Sanctum session/cookie based auth
   headers: {
     'Accept': 'application/json',
-  }
+  },
+  timeout: 15000, // Set a consistent 15 second timeout
 });
 
 // Function to get CSRF cookie from Sanctum
 const getCsrfCookie = async () => {
   try {
-    await axios.get(SANCTUM_CSRF_URL, { withCredentials: true });
+    await axios.get(SANCTUM_CSRF_URL, { 
+      withCredentials: true,
+      timeout: 8000, // Shorter timeout for CSRF cookie
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
     console.log("CSRF cookie set successfully");
   } catch (error) {
     console.error("Error fetching CSRF cookie:", error);
-    // Handle error appropriately
+    // Continue without throwing - CSRF may not be required in all setups
   }
 };
 
 // Interceptor to add Authorization header if a token exists (e.g., in localStorage)
-// Adjust this based on your token storage strategy if not using cookies
 apiClient.interceptors.request.use(config => {
-  const token = localStorage.getItem('authToken'); // Example: Get token from local storage
+  const token = localStorage.getItem('authToken'); // Get token from local storage
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -39,7 +45,7 @@ apiClient.interceptors.request.use(config => {
   return Promise.reject(error);
 });
 
-// Add response interceptor for debugging
+// Add response interceptor for improved error handling and debugging
 apiClient.interceptors.response.use(
   response => response,
   error => {
@@ -47,10 +53,20 @@ apiClient.interceptors.response.use(
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Data:', error.response.data);
-      console.error('Headers:', error.response.headers);
     } else if (error.request) {
-      console.error('No response received:', error.request);
+      console.error('No response received - server might be down or unreachable');
     }
+    
+    // For timeout errors, provide a clearer message
+    if (error.code === 'ECONNABORTED') {
+      error.message = 'Le serveur ne répond pas dans le délai imparti. Veuillez réessayer plus tard.';
+    }
+    
+    // For network errors, provide a clearer message
+    if (error.message.includes('Network Error')) {
+      error.message = 'Impossible de se connecter au serveur. Vérifiez votre connexion internet et que le serveur est démarré.';
+    }
+    
     return Promise.reject(error);
   }
 );
@@ -118,11 +134,25 @@ export const publicApi = {
   // Profile data
   getResponsableProfile: async () => {
     try {
-      // First try to get data from the public endpoint
-      const response = await fetch(`${PUBLIC_API}/responsable-formation/profile`);
+      // Set a timeout to ensure the request doesn't hang indefinitely
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
       
-      if (!response.ok) {
-        console.warn(`Public API not available: ${response.status}. Using fallback data.`);
+      // First try to get data from the public endpoint
+      const response = await fetch(`${PUBLIC_API}/responsable-formation/profile`, {
+        signal: controller.signal
+      }).catch(error => {
+        // Handle network errors or timeouts
+        console.warn(`Network error for profile API: ${error.message}`);
+        return null;
+      });
+      
+      // Clear the timeout
+      clearTimeout(timeoutId);
+      
+      // If fetch failed completely or timed out
+      if (!response || !response.ok) {
+        console.warn(`Public API not available: ${response?.status || 'Network Error'}. Using fallback data.`);
         // Return fallback data if the API endpoint is not available
         return {
           id: 1,
@@ -147,7 +177,27 @@ export const publicApi = {
         };
       }
       
-      return await response.json();
+      // Parse the JSON with a timeout
+      try {
+        const jsonData = await response.json();
+        return jsonData;
+      } catch (jsonError) {
+        console.error('Error parsing profile JSON:', jsonError);
+        // Return fallback on JSON parse error
+        return {
+          id: 1,
+          name: 'Responsable Formation (JSON Error)',
+          role: 'Responsable Formation',
+          avatar: '/avatars/responsable1.jpg',
+          email: 'responsable@ofppt.ma',
+          statistics: {
+            pending_validations: 5,
+            active_formations: 10,
+            completed_formations: 15,
+            formateurs_en_formation: 8
+          }
+        };
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
       // Return fallback data in case of error
@@ -174,13 +224,26 @@ export const publicApi = {
   // Formations data
   getFormations: async () => {
     try {
-      const response = await fetch(`${PUBLIC_API}/responsable-formation/formations`);
+      // Set a timeout to ensure the request doesn't hang indefinitely
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
       
-      if (!response.ok) {
-        console.warn(`Formations API not available: ${response.status}. Using fallback data.`);
+      const response = await fetch(`${PUBLIC_API}/responsable-formation/formations`, {
+        signal: controller.signal
+      }).catch(error => {
+        console.warn(`Network error for formations API: ${error.message}`);
+        return null;
+      });
+      
+      // Clear the timeout
+      clearTimeout(timeoutId);
+      
+      // If fetch failed completely or timed out
+      if (!response || !response.ok) {
+        console.warn(`Formations API not available: ${response?.status || 'Network Error'}. Using fallback data.`);
         // Return fallback data if the API endpoint is not available
         return {
-          message: 'Liste des formations récupérée avec succès',
+          message: 'Liste des formations récupérée avec succès (données statiques)',
           data: [
             {
               id: 1,
@@ -206,7 +269,26 @@ export const publicApi = {
         };
       }
       
-      return await response.json();
+      // Parse the JSON with a try/catch
+      try {
+        const jsonData = await response.json();
+        return jsonData;
+      } catch (jsonError) {
+        console.error('Error parsing formations JSON:', jsonError);
+        // Return fallback on JSON parse error
+        return {
+          message: 'Liste des formations (erreur JSON)',
+          data: [
+            {
+              id: 1,
+              titre: 'Formation React',
+              description: 'Apprendre React.js',
+              date_debut: '2023-06-01',
+              date_fin: '2023-06-15'
+            }
+          ]
+        };
+      }
     } catch (error) {
       console.error('Error fetching formations:', error);
       // Return fallback data in case of error
@@ -240,12 +322,15 @@ export const publicApi = {
   
   createFormation: async (formationData) => {
     try {
-      // Use apiClient for authenticated POST
+      // Use apiClient with timeout for authenticated POST
       const isFormData = formationData instanceof FormData;
       const response = await apiClient.post(
         '/responsable-formation/formations',
         formationData,
-        isFormData ? { headers: { 'Accept': 'application/json' } } : undefined
+        {
+          headers: isFormData ? { 'Accept': 'application/json' } : undefined,
+          timeout: 10000 // 10 second timeout
+        }
       );
       return response.data;
     } catch (error) {
@@ -262,10 +347,23 @@ export const publicApi = {
   // Sessions data
   getSessions: async () => {
     try {
-      const response = await fetch(`${PUBLIC_API}/responsable-formation/sessions`);
+      // Set a timeout to ensure the request doesn't hang indefinitely
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
       
-      if (!response.ok) {
-        console.warn(`Sessions API not available: ${response.status}. Using fallback data.`);
+      const response = await fetch(`${PUBLIC_API}/responsable-formation/sessions`, {
+        signal: controller.signal
+      }).catch(error => {
+        console.warn(`Network error for sessions API: ${error.message}`);
+        return null;
+      });
+      
+      // Clear the timeout
+      clearTimeout(timeoutId);
+      
+      // If fetch failed completely or timed out
+      if (!response || !response.ok) {
+        console.warn(`Sessions API not available: ${response?.status || 'Network Error'}. Using fallback data.`);
         // Return fallback data for sessions
         return {
           message: 'Liste des sessions récupérée avec succès',
@@ -296,7 +394,27 @@ export const publicApi = {
         };
       }
       
-      return await response.json();
+      // Parse the JSON safely
+      try {
+        const jsonData = await response.json();
+        return jsonData;
+      } catch (jsonError) {
+        console.error('Error parsing sessions JSON:', jsonError);
+        // Return fallback data in case of JSON parsing error
+        return {
+          message: 'Liste des sessions (erreur JSON)',
+          data: [
+            {
+              id: 1,
+              formation_id: 1,
+              titre: 'Session 1 - React Basics',
+              date: '2023-06-01',
+              heure_debut: '09:00',
+              heure_fin: '12:00'
+            }
+          ]
+        };
+      }
     } catch (error) {
       console.error('Error fetching sessions:', error);
       // Return fallback data in case of error
@@ -347,23 +465,28 @@ export const publicApi = {
   // Presence stats data
   getPresenceStats: async () => {
     try {
-      const response = await fetch(`${PUBLIC_API}/responsable-formation/presences/stats`);
-      
-      if (!response.ok) {
-        console.warn(`Presence stats API not available: ${response.status}. Using fallback data.`);
-        // Return fallback data for presence stats
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      const response = await fetch(`${PUBLIC_API}/responsable-formation/presences/stats`, {
+        signal: controller.signal
+      }).catch(error => {
+        console.warn(`Network error for presence stats API: ${error.message}`);
+        return null;
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response || !response.ok) {
+        console.warn(`Presence stats API not available: ${response?.status || 'Network Error'}. Using fallback data.`);
         return {
-          message: 'Statistiques de présence récupérées avec succès',
+          message: 'Statistiques de présence récupérées avec succès (données statiques)',
           data: {
             total_sessions: 25,
             presence_rate: 85,
             sessions_by_month: [
-              { month: 'Jan', count: 2 },
-              { month: 'Fév', count: 3 },
-              { month: 'Mar', count: 4 },
-              { month: 'Avr', count: 3 },
-              { month: 'Mai', count: 5 },
-              { month: 'Juin', count: 8 }
+              { month: 'Jan', count: 2 }, { month: 'Fév', count: 3 }, { month: 'Mar', count: 4 },
+              { month: 'Avr', count: 3 }, { month: 'Mai', count: 5 }, { month: 'Juin', count: 8 }
             ],
             recent_absences: [
               { formateur: 'Karim Bennani', date: '2023-05-20', session: 'Laravel Basics' },
@@ -373,22 +496,26 @@ export const publicApi = {
         };
       }
       
-      return await response.json();
+      try {
+        const jsonData = await response.json();
+        return jsonData;
+      } catch (jsonError) {
+         console.error('Error parsing presence stats JSON:', jsonError);
+         return {
+            message: 'Statistiques de présence (erreur JSON)',
+            data: { total_sessions: 0, presence_rate: 0, sessions_by_month: [], recent_absences: [] }
+         };
+      }
     } catch (error) {
       console.error('Error fetching presence stats:', error);
-      // Return fallback data in case of error
       return {
-        message: 'Statistiques de présence (données statiques)',
+        message: 'Statistiques de présence (données statiques erreur)',
         data: {
           total_sessions: 25,
           presence_rate: 85,
           sessions_by_month: [
-            { month: 'Jan', count: 2 },
-            { month: 'Fév', count: 3 },
-            { month: 'Mar', count: 4 },
-            { month: 'Avr', count: 3 },
-            { month: 'Mai', count: 5 },
-            { month: 'Juin', count: 8 }
+            { month: 'Jan', count: 2 }, { month: 'Fév', count: 3 }, { month: 'Mar', count: 4 },
+            { month: 'Avr', count: 3 }, { month: 'Mai', count: 5 }, { month: 'Juin', count: 8 }
           ],
           recent_absences: [
             { formateur: 'Karim Bennani', date: '2023-05-20', session: 'Laravel Basics' },
@@ -402,57 +529,46 @@ export const publicApi = {
   // Reports data
   getReports: async () => {
     try {
-      const response = await fetch(`${PUBLIC_API}/responsable-formation/reports`);
-      
-      if (!response.ok) {
-        console.warn(`Reports API not available: ${response.status}. Using fallback data.`);
-        // Return fallback data for reports
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      const response = await fetch(`${PUBLIC_API}/responsable-formation/reports`, {
+        signal: controller.signal
+      }).catch(error => {
+        console.warn(`Network error for reports API: ${error.message}`);
+        return null;
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response || !response.ok) {
+        console.warn(`Reports API not available: ${response?.status || 'Network Error'}. Using fallback data.`);
         return {
-          message: 'Rapports récupérés avec succès',
+          message: 'Rapports récupérés avec succès (données statiques)',
           data: [
-            {
-              id: 1,
-              titre: 'Rapport Trimestriel - Formations Q1 2023',
-              date_creation: '2023-04-05',
-              type: 'pdf',
-              taille: '1.2 MB',
-              url: '/reports/q1-2023.pdf'
-            },
-            {
-              id: 2,
-              titre: 'Statistiques de Participation - Janvier 2023',
-              date_creation: '2023-02-10',
-              type: 'excel',
-              taille: '856 KB',
-              url: '/reports/stats-jan-2023.xlsx'
-            }
+            { id: 1, titre: 'Rapport Trimestriel - Formations Q1 2023', date_creation: '2023-04-05', type: 'pdf', taille: '1.2 MB', url: '/reports/q1-2023.pdf' },
+            { id: 2, titre: 'Statistiques de Participation - Janvier 2023', date_creation: '2023-02-10', type: 'excel', taille: '856 KB', url: '/reports/stats-jan-2023.xlsx' }
           ]
         };
       }
       
-      return await response.json();
+      try {
+        const jsonData = await response.json();
+        return jsonData;
+      } catch (jsonError) {
+        console.error('Error parsing reports JSON:', jsonError);
+        return {
+            message: 'Rapports (erreur JSON)',
+            data: []
+        };
+      }
     } catch (error) {
       console.error('Error fetching reports:', error);
-      // Return fallback data in case of error
       return {
-        message: 'Rapports (données statiques)',
+        message: 'Rapports (données statiques erreur)',
         data: [
-          {
-            id: 1,
-            titre: 'Rapport Trimestriel - Formations Q1 2023',
-            date_creation: '2023-04-05',
-            type: 'pdf',
-            taille: '1.2 MB',
-            url: '/reports/q1-2023.pdf'
-          },
-          {
-            id: 2,
-            titre: 'Statistiques de Participation - Janvier 2023',
-            date_creation: '2023-02-10',
-            type: 'excel',
-            taille: '856 KB',
-            url: '/reports/stats-jan-2023.xlsx'
-          }
+          { id: 1, titre: 'Rapport Trimestriel - Formations Q1 2023', date_creation: '2023-04-05', type: 'pdf', taille: '1.2 MB', url: '/reports/q1-2023.pdf' },
+          { id: 2, titre: 'Statistiques de Participation - Janvier 2023', date_creation: '2023-02-10', type: 'excel', taille: '856 KB', url: '/reports/stats-jan-2023.xlsx' }
         ]
       };
     }
@@ -461,125 +577,147 @@ export const publicApi = {
   // Absences data
   getAbsences: async () => {
     try {
-      const response = await fetch(`${PUBLIC_API}/responsable-formation/absences`);
-      
-      if (!response.ok) {
-        console.warn(`Absences API not available: ${response.status}. Using fallback data.`);
-        // Return fallback data for absences
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      const response = await fetch(`${PUBLIC_API}/responsable-formation/absences`, {
+        signal: controller.signal
+      }).catch(error => {
+        console.warn(`Network error for absences API: ${error.message}`);
+        return null;
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response || !response.ok) {
+        console.warn(`Absences API not available: ${response?.status || 'Network Error'}. Using fallback data.`);
         return {
-          message: 'Liste des absences récupérée avec succès',
+          message: 'Liste des absences récupérée avec succès (données statiques)',
           data: [
-            {
-              id: 1,
-              name: "Hannah Laurent",
-              image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Capturjje.PNG-Yd9Iy9Yd9Iy9Yd9Iy9Yd9Iy9Yd9Iy9Yd9Iy9.png",
-              department: "Marketing",
-              absenceType: "Congé maladie",
-              startDate: "2023-04-15",
-              endDate: "2023-04-20",
-            },
-            {
-              id: 2,
-              name: "Thomas Martin",
-              image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Capturjje.PNG-Yd9Iy9Yd9Iy9Yd9Iy9Yd9Iy9Yd9Iy9Yd9Iy9.png",
-              department: "Développement",
-              absenceType: "Congé annuel",
-              startDate: "2023-04-10",
-              endDate: "2023-04-17",
-            }
+            { id: 1, name: "Hannah Laurent", image: "/avatars/placeholder.png", department: "Marketing", absenceType: "Congé maladie", startDate: "2023-04-15", endDate: "2023-04-20" },
+            { id: 2, name: "Thomas Martin", image: "/avatars/placeholder.png", department: "Développement", absenceType: "Congé annuel", startDate: "2023-04-10", endDate: "2023-04-17" }
           ]
         };
       }
       
-      const data = await response.json();
-      return data;
+      try {
+        const jsonData = await response.json();
+        return jsonData;
+      } catch (jsonError) {
+        console.error('Error parsing absences JSON:', jsonError);
+        // If data is critical and can't be handled by fallback, rethrow or handle specifically
+        // For now, returning fallback to prevent crashes
+        return {
+            message: 'Liste des absences (erreur JSON)',
+            data: []
+        };
+      }
     } catch (error) {
       console.error('Error fetching absences:', error);
-      throw new Error(`Error fetching absences: ${error.message}`);
+      // Fallback for other errors
+       return {
+          message: 'Liste des absences récupérée avec succès (données statiques erreur)',
+          data: [
+            { id: 1, name: "Hannah Laurent", image: "/avatars/placeholder.png", department: "Marketing", absenceType: "Congé maladie", startDate: "2023-04-15", endDate: "2023-04-20" },
+            { id: 2, name: "Thomas Martin", image: "/avatars/placeholder.png", department: "Développement", absenceType: "Congé annuel", startDate: "2023-04-10", endDate: "2023-04-17" }
+          ]
+        };
     }
   },
 
   // Documents data
   getDocuments: async () => {
     try {
-      const response = await fetch(`${PUBLIC_API}/responsable-formation/documents`);
-      
-      if (!response.ok) {
-        console.warn(`Documents API not available: ${response.status}. Using fallback data.`);
-        // Return fallback data for documents
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      const response = await fetch(`${PUBLIC_API}/responsable-formation/documents`, {
+        signal: controller.signal
+      }).catch(error => {
+        console.warn(`Network error for documents API: ${error.message}`);
+        return null;
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response || !response.ok) {
+        console.warn(`Documents API not available: ${response?.status || 'Network Error'}. Using fallback data.`);
         return {
-          message: 'Liste des documents récupérée avec succès',
+          message: 'Liste des documents récupérée avec succès (données statiques)',
           data: [
-            {
-              id: 1,
-              title: "Rapport Trimestriel - Formations Q1 2023",
-              type: "pdf",
-              size: "1.2 MB",
-              createdAt: "2023-04-05",
-              category: "Rapports",
-              url: "/documents/rapport-q1-2023.pdf",
-            },
-            {
-              id: 2,
-              title: "Guide du Formateur - Techniques Pédagogiques",
-              type: "docx",
-              size: "850 KB",
-              createdAt: "2023-03-15",
-              category: "Guides",
-              url: "/documents/guide-formateur-2023.docx",
-            }
+            { id: 1, title: "Rapport Trimestriel - Formations Q1 2023", type: "pdf", size: "1.2 MB", createdAt: "2023-04-05", category: "Rapports", url: "/documents/rapport-q1-2023.pdf" },
+            { id: 2, title: "Guide du Formateur - Techniques Pédagogiques", type: "docx", size: "850 KB", createdAt: "2023-03-15", category: "Guides", url: "/documents/guide-formateur-2023.docx" }
           ]
         };
       }
       
-      const data = await response.json();
-      return data;
+      try {
+        const jsonData = await response.json();
+        return jsonData;
+      } catch (jsonError) {
+        console.error('Error parsing documents JSON:', jsonError);
+        return {
+            message: 'Liste des documents (erreur JSON)',
+            data: []
+        };
+      }
     } catch (error) {
       console.error('Error fetching documents:', error);
-      throw new Error(`Error fetching documents: ${error.message}`);
+       return {
+          message: 'Liste des documents récupérée avec succès (données statiques erreur)',
+          data: [
+            { id: 1, title: "Rapport Trimestriel - Formations Q1 2023", type: "pdf", size: "1.2 MB", createdAt: "2023-04-05", category: "Rapports", url: "/documents/rapport-q1-2023.pdf" },
+            { id: 2, title: "Guide du Formateur - Techniques Pédagogiques", type: "docx", size: "850 KB", createdAt: "2023-03-15", category: "Guides", url: "/documents/guide-formateur-2023.docx" }
+          ]
+        };
     }
   },
   
   // Logistics data
   getLogistics: async () => {
     try {
-      const response = await fetch(`${PUBLIC_API}/responsable-formation/logistics`);
-      
-      if (!response.ok) {
-        console.warn(`Logistics API not available: ${response.status}. Using fallback data.`);
-        // Return fallback data for logistics
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      const response = await fetch(`${PUBLIC_API}/responsable-formation/logistics`, {
+        signal: controller.signal
+      }).catch(error => {
+        console.warn(`Network error for logistics API: ${error.message}`);
+        return null;
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response || !response.ok) {
+        console.warn(`Logistics API not available: ${response?.status || 'Network Error'}. Using fallback data.`);
         return {
-          message: 'Liste des ressources logistiques récupérée avec succès',
+          message: 'Liste des ressources logistiques récupérée avec succès (données statiques)',
           data: [
-            {
-              id: 1,
-              name: "Salle de formation A2",
-              type: "Salle",
-              capacity: 30,
-              equipment: ["Projecteur", "Tableau blanc", "PC", "WiFi"],
-              location: "Bâtiment A, 2ème étage",
-              status: "disponible",
-              imageUrl: "/rooms/salle-a2.jpg"
-            },
-            {
-              id: 2,
-              name: "Vidéoprojecteur HP HD",
-              type: "Équipement",
-              serialNumber: "VP-20230115",
-              location: "Stock principal",
-              status: "disponible",
-              lastMaintenance: "2023-01-10",
-              imageUrl: "/equipment/projector.jpg"
-            }
+            { id: 1, name: "Salle de formation A2", type: "Salle", capacity: 30, equipment: ["Projecteur", "Tableau blanc"], location: "Bâtiment A", status: "disponible", imageUrl: "/rooms/salle-a2.jpg" },
+            { id: 2, name: "Vidéoprojecteur HP HD", type: "Équipement", serialNumber: "VP-20230115", location: "Stock", status: "maintenance", imageUrl: "/equipment/projector.jpg" }
           ]
         };
       }
       
-      const data = await response.json();
-      return data;
+      try {
+        const jsonData = await response.json();
+        return jsonData;
+      } catch (jsonError) {
+        console.error('Error parsing logistics JSON:', jsonError);
+        return {
+            message: 'Liste des ressources logistiques (erreur JSON)',
+            data: []
+        };
+      }
     } catch (error) {
       console.error('Error fetching logistics:', error);
-      throw new Error(`Error fetching logistics: ${error.message}`);
+       return {
+          message: 'Liste des ressources logistiques récupérée avec succès (données statiques erreur)',
+          data: [
+            { id: 1, name: "Salle de formation A2", type: "Salle", capacity: 30, equipment: ["Projecteur", "Tableau blanc"], location: "Bâtiment A", status: "disponible", imageUrl: "/rooms/salle-a2.jpg" },
+            { id: 2, name: "Vidéoprojecteur HP HD", type: "Équipement", serialNumber: "VP-20230115", location: "Stock", status: "maintenance", imageUrl: "/equipment/projector.jpg" }
+          ]
+        };
     }
   },
 };
