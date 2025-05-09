@@ -24,6 +24,7 @@ return new class extends Migration
             $table->foreignId('region_id')->nullable()->constrained('regions')->nullOnDelete();
             $table->foreignId('filiere_id')->nullable()->constrained('filieres')->nullOnDelete();
             $table->string('image')->nullable();
+            $table->enum('type_formation', ['présentiel', 'à distance', 'hybride'])->default('présentiel'); 
             $table->timestamps();
         });
     }

@@ -29,6 +29,7 @@ class Formation extends Model
         'region_id',
         'filiere_id',
         'image',
+        'type_formation'
     ];
 
     /**

@@ -16,6 +16,12 @@ use App\Models\User;
 use App\Models\Role;
 use App\Http\Controllers\Api\Admin\FormationController as AdminFormationController;
 use App\Http\Controllers\Api\Admin\SessionController as AdminSessionFormationController;
+//cdc
+use App\Http\Controllers\Api\Responsablecdc\FormationController;
+use App\Http\Controllers\Api\Responsablecdc\FormateurFormationController;
+use App\Http\Controllers\Api\Responsablecdc\FormateurAnimateurController; 
+use App\Http\Controllers\Api\Responsablecdc\UserController; 
+
 
 
 // Public route for testing API connection
@@ -374,3 +380,32 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
 });
+
+
+//responsable cdc
+
+// Routes pour les formations et les formateurs
+Route::get('/formations', [FormationController::class, 'index']);
+Route::post('/formations', [FormationController::class, 'store']);
+Route::get('/formations/{id}', [FormationController::class, 'show']);
+Route::put('/formations/{id}', [FormationController::class, 'update']);
+Route::delete('/formations/{id}', [FormationController::class, 'destroy']);
+
+// Routes pour les formateurs dans une formation
+Route::get('/formations/{id}/formateurs', [FormationController::class, 'getFormateurs']);
+Route::post('/formations/assign-formateur', [FormationController::class, 'assignFormateur']);
+Route::put('/formations/formateur/{id}', [FormationController::class, 'updateFormateurStatus']);
+Route::delete('/formations/{formationId}/formateur/{userId}', [FormationController::class, 'removeFormateur']);
+
+//formateur_formation_api
+Route::apiResource('formateur-formations', FormateurFormationController::class);
+
+Route::get('formateurs/{formateurId}/formations', [FormateurFormationController::class, 'getFormationsByFormateur']);
+Route::get('formations/{formationId}/formateurs', [FormateurFormationController::class, 'getFormateursByFormation']);
+Route::put('formateur-formations/update-status', [FormateurFormationController::class, 'updateStatus']);
+// formateur animateur
+Route::apiResource('formateurs-animateurs', FormateurAnimateurController::class); //yes
+
+//user
+Route::get('/users', [UserController::class, 'index']);
+
