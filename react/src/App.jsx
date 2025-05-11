@@ -27,6 +27,9 @@ import ResponsableCdcDashboard from './pages/responsable-cdc/ResponsableCdcDashb
 import SideBar from './pages/responsable-cdc/SideBar';
 import ResponsablePage from './pages/responsable-cdc/ResponsablePage';
 import FormateursFormationPage from './pages/responsable-cdc/FormateursFormationPage';
+import ParticipantsPage from './pages/responsable-cdc/ParticipantsPage';
+import FormateurAnimateurPage from './pages/responsable-cdc/FormateurAnimateurPage';
+
 
 
 // RequireAuth component
@@ -89,7 +92,12 @@ function App() {
                 <Route path="dashboard" element={<ResponsableCdcDashboard />} />
                 <Route path="sidebar" element={<SideBar />} />
                 <Route path="responsable" element={< ResponsablePage/>} />
+                <Route path="participants" element={< ParticipantsPage/>} />
                 {/* <Route path="formateur-formations/:formationId" element={<FormateursFormationPage />} /> */}
+                
+                <Route path="formateur_animateur" element={<FormateurAnimateurPage/>} />
+
+
             </Route>
             <Route path="/formateurs-formation/:formationId" element={<FormateursFormationPage />} />
 

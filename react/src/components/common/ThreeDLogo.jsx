@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Canvas } from '@react-three/fiber';
+
 import { OrbitControls, useGLTF, Environment, ContactShadows } from '@react-three/drei';
 
 function LogoModel() {

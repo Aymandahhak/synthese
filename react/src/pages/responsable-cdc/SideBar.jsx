@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Nav } from 'react-bootstrap';
 import { Link, useLocation } from 'react-router-dom';
+import { FaChalkboardTeacher } from 'react-icons/fa';
+
 import {
   BsSpeedometer2,
   BsBook,
   BsGear,
-  BsPeople
+  BsPeople ,
 } from 'react-icons/bs';
 
 const SideBar = () => {
@@ -21,6 +23,10 @@ const SideBar = () => {
   const navItems = [
     { path: '/responsable-cdc/dashboard', name: 'Dashboard', icon: <BsSpeedometer2 /> },
     { path: '/responsable-cdc/formation', name: 'Formation', icon: <BsBook /> },
+    { path: '/responsable-cdc/participants', name: 'Participants', icon: <BsPeople /> },
+    { path: '/responsable-cdc/formateur_animateur', name: 'Formateur animateurs', icon: <FaChalkboardTeacher /> },
+
+
   ];
 
   const styles = {
