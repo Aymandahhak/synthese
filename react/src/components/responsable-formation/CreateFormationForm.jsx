@@ -9,7 +9,7 @@ import { AlertCircle } from "lucide-react";
 import { format, isAfter, addDays, parseISO } from "date-fns";
 import { fr } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
-import { publicApi } from "@/services/api";
+import { createFormation } from "@/services/api";
 import { useFormations } from "@/hooks/useFormations";
 import { useToast } from "@/components/responsable-formation/ui/use-toast";
 import { useProfile } from "@/hooks/useProfile";
@@ -259,153 +259,126 @@ export default function CreateFormationForm({ onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Check if there are validation errors
     if (Object.keys(validationErrors).length > 0) {
       setError("Veuillez corriger les erreurs de validation.");
-      // Highlight the fields with errors
       Object.keys(validationErrors).forEach(field => {
-        toast.error(`Erreur: ${validationErrors[field]}`);
+        toast.error(`Erreur de validation: ${validationErrors[field]}`);
       });
       return;
     }
     
-    // Additional validation for required fields
     const requiredFields = ['titre', 'date_debut', 'date_fin', 'lieu'];
     const missingFields = requiredFields.filter(field => !formData[field]);
     
     if (missingFields.length > 0) {
-      const fieldNames = {
-        titre: 'Titre',
-        date_debut: 'Date de début',
-        date_fin: 'Date de fin',
-        lieu: 'Lieu'
-      };
-      
+      const fieldNames = { titre: 'Titre', date_debut: 'Date de début', date_fin: 'Date de fin', lieu: 'Lieu' };
       setError(`Veuillez remplir tous les champs obligatoires: ${missingFields.map(f => fieldNames[f]).join(', ')}.`);
+      // Display toast for missing fields
+      missingFields.forEach(field => {
+        toast.error(`Champ obligatoire manquant: ${fieldNames[field]}`);
+      });
       return;
     }
     
+    setIsLoading(true);
+    setError(null);
+    setSuccess(false);
+      
     try {
-      setIsLoading(true);
-      setError(null);
-      
-      // Create form data for file upload
       const submitData = new FormData();
-      
-      // Ajouter chaque champ du formulaire au FormData
       Object.keys(formData).forEach(key => {
-        // Convertir les valeurs numériques en chaînes pour FormData
-        if (key === 'capacite_max') {
-          submitData.append(key, String(formData[key]));
-        } else if (key === 'region_id' || key === 'filiere_id') {
-          // S'assurer que les IDs sont envoyés comme chaînes
-          if (formData[key]) {
-            submitData.append(key, String(formData[key]));
-          }
+        if (key === 'capacite_max' || key === 'region_id' || key === 'filiere_id' || key === 'responsable_id') {
+          if (formData[key]) submitData.append(key, String(formData[key]));
         } else {
-          // Ajouter les autres champs normalement
           submitData.append(key, formData[key]);
         }
       });
       
-      // Ajouter l'image si elle existe
       if (formationImage) {
         submitData.append('image', formationImage);
       }
       
-      // Use a temporary responsable_id for testing if not available from profile
-      if (!formData.responsable_id && profile?.id) {
-        submitData.append('responsable_id', String(profile.id));
-      } else if (!formData.responsable_id) {
-        submitData.append('responsable_id', '1');
-        console.warn('Aucun ID de responsable trouvé dans le profil, utilisation de l\'ID par défaut');
+      let respId = formData.responsable_id || profile?.id;
+      if (!respId) {
+        console.warn('Aucun ID de responsable. Utilisation ID 1 par défaut pour test.');
+        respId = '1'; 
       }
+      submitData.append('responsable_id', String(respId));
       
-      console.log('FormData envoyé:', Object.fromEntries(submitData.entries()));
+      console.log('FormData envoyé pour création:', Object.fromEntries(submitData.entries()));
       
-      // Send API request
-      const response = await publicApi.createFormation(submitData);
+      const response = await createFormation(submitData);
       
-      // Vérifier si la réponse contient une erreur
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      
-      // Vérifier si la réponse contient des données
-      if (!response.data) {
-        console.warn('La réponse API ne contient pas de données:', response);
-        // Si nous sommes en mode développement, on accepte quand même la réponse
-        if (response.message && response.message.includes('développement')) {
-          console.log('Mode développement détecté, création acceptée malgré l\'absence de données');
-          toast.info("Mode développement", {
-            description: "Formation créée en mode développement. Les données réelles seront disponibles en production."
-          });
-        } else {
-          throw new Error('La réponse du serveur est incomplète. Veuillez réessayer.');
-        }
-      }
-      
-      toast.success("Formation créée avec succès", {
-        description: "La formation a été ajoutée à la liste."
-      });
-      
-      // Ajouter la nouvelle formation à l'état local si elle n'est pas déjà présente
-      if (response.data && setFormations) {
-        console.log('Ajout de la nouvelle formation à l\'état local:', response.data);
-        setFormations(prevFormations => {
-          // Vérifier si la formation existe déjà
-          const exists = prevFormations.some(f => f.id === response.data.id);
-          if (!exists) {
-            return [...prevFormations, response.data];
-          }
-          return prevFormations;
+      console.log('Réponse API createFormation:', response);
+
+      if (response && response.id) {
+        toast.success("Formation créée avec succès!", {
+          description: `La formation "${response.titre || formData.titre}" a été ajoutée.`
         });
-      } else if (response.message && response.message.includes('développement')) {
-        // En mode développement, si nous n'avons pas de données mais un message de succès
-        console.log('Ajout d\'une formation temporaire en mode développement');
-        const tempFormation = {
-          id: Math.floor(Math.random() * 1000) + 100,
-          titre: formData.titre,
-          description: formData.description,
-          date_debut: formData.date_debut,
-          date_fin: formData.date_fin,
-          lieu: formData.lieu,
-          capacite_max: formData.capacite_max,
-          statut: 'pending',
-          created_at: new Date().toISOString()
-        };
-        
-        if (setFormations) {
-          setFormations(prevFormations => [...prevFormations, tempFormation]);
+        setSuccess(true);
+
+        if (refreshFormations) {
+          console.log('Rafraîchissement de la liste des formations après création...');
+          await refreshFormations();
         }
-      }
-      
-      // Rafraîchir les formations pour inclure la nouvelle
-      if (refreshFormations) {
-        console.log('Rafraîchissement de la liste des formations...');
-        // Premier rafraîchissement immédiat
-        refreshFormations();
         
-        // Second rafraîchissement après un délai pour s'assurer que le backend a bien traité la requête
         setTimeout(() => {
-          console.log('Second rafraîchissement des formations...');
-          refreshFormations();
-        }, 1000);
+          onClose(); 
+        }, 1500);
+
+      } else {
+        // Handle API error responses (e.g., validation errors from Laravel)
+        let mainErrorMessage = "La création de la formation a échoué.";
+        
+        if (response && response.message) {
+            mainErrorMessage = response.message;
+        } else if (typeof response === 'string') {
+            mainErrorMessage = response;
+        }
+
+        setError(mainErrorMessage);
+        toast.error("Échec de la création", { description: mainErrorMessage });
+
+        if (response && response.errors) {
+            Object.entries(response.errors).forEach(([field, messages]) => {
+                if (Array.isArray(messages)) {
+                    messages.forEach(message => {
+                        toast.error(`Erreur (${field}): ${message}`, { duration: 5000 });
+                    });
+                }
+            });
+        }
+        console.error("Échec de la création de la formation:", mainErrorMessage, response);
       }
-      
-      setSuccess(true);
-      
-      // Close form after short delay
-      setTimeout(() => {
-        onClose(); // Close the form
-      }, 1500);
       
     } catch (err) {
-      console.error("Error creating formation:", err);
-      setError(err.message || "Une erreur s'est produite lors de la création de la formation. Veuillez réessayer.");
-      toast.error("Erreur lors de la création", {
-        description: err.message || "Une erreur s'est produite. Veuillez réessayer."
-      });
+      console.error("Erreur interne lors de la création de la formation:", err);
+      let mainErrorMessage = "Une erreur interne s'est produite. Veuillez réessayer.";
+      
+      if (err && err.data && err.data.message) {
+        mainErrorMessage = err.data.message;
+      } else if (err && err.message) {
+        mainErrorMessage = err.message;
+      }
+
+      if (err && err.data && err.data.error) {
+        setError(mainErrorMessage);
+        const fieldErrors = err.data.error;
+        if (typeof fieldErrors === 'object' && fieldErrors !== null) {
+            Object.entries(fieldErrors).forEach(([field, messages]) => {
+                if (Array.isArray(messages)) {
+                    messages.forEach(message => {
+                        toast.error(`Erreur (${field}): ${message}`, { duration: 5000 });
+                    });
+                }
+            });
+        } else if (typeof fieldErrors === 'string') {
+            toast.error(fieldErrors, { duration: 5000 });
+        }
+      } else {
+        setError(mainErrorMessage);
+        toast.error("Échec de la création", { description: mainErrorMessage });
+      }
     } finally {
       setIsLoading(false);
     }

@@ -1,15 +1,15 @@
 import axios from 'axios';
 
 // Use the environment variable for API base URL 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-const SANCTUM_CSRF_URL = import.meta.env.VITE_SANCTUM_CSRF_URL || `${API_BASE_URL}/sanctum/csrf-cookie`;
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'; // Default to full API path if not set
+const SANCTUM_CSRF_URL = import.meta.env.VITE_SANCTUM_CSRF_URL || `${import.meta.env.VITE_API_URL?.replace('/api','') || 'http://localhost:8000'}/sanctum/csrf-cookie`;
 
-// Base URL for API calls for public access (no auth)
-const API_URL = 'http://localhost:8000/api';
-const PUBLIC_API = `${API_URL}/public`;
+// Base URL for API calls for public access (no auth) - Should also use VITE_API_URL principle
+const PUBLIC_API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const PUBLIC_API = `${PUBLIC_API_BASE}/public`;
 
 const apiClient = axios.create({
-  baseURL: `${API_BASE_URL}/api`, // Append /api to the base URL
+  baseURL: API_BASE_URL, // Use API_BASE_URL directly, assuming it includes /api
   withCredentials: true, // Important for Sanctum session/cookie based auth
   headers: {
     'Accept': 'application/json',
@@ -99,7 +99,6 @@ export const getResponsableFormationDashboardData = () => apiClient.get(`${rfPre
 // Authenticated routes for later use
 export const getSessionList = (params = {}) => apiClient.get(`${rfPrefix}/sessions`, { params });
 export const getSession = (id) => apiClient.get(`${rfPrefix}/sessions/${id}`);
-export const createSession = (sessionData) => apiClient.post(`${rfPrefix}/sessions`, sessionData);
 export const updateSession = (id, sessionData) => apiClient.put(`${rfPrefix}/sessions/${id}`, sessionData);
 export const deleteSession = (id) => apiClient.delete(`${rfPrefix}/sessions/${id}`);
 
@@ -320,30 +319,6 @@ export const publicApi = {
     }
   },
   
-  createFormation: async (formationData) => {
-    try {
-      // Use apiClient with timeout for authenticated POST
-      const isFormData = formationData instanceof FormData;
-      const response = await apiClient.post(
-        '/responsable-formation/formations',
-        formationData,
-        {
-          headers: isFormData ? { 'Accept': 'application/json' } : undefined,
-          timeout: 10000 // 10 second timeout
-        }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error creating formation:', error);
-      // Return error in a consistent format
-      return {
-        error: error.message || 'Une erreur s\'est produite lors de la création de la formation',
-        message: 'Erreur lors de la création de la formation',
-        data: null
-      };
-    }
-  },
-
   // Sessions data
   getSessions: async () => {
     try {
@@ -448,20 +423,6 @@ export const publicApi = {
     }
   },
   
-  createSession: async (sessionData) => {
-    try {
-      const response = await apiClient.post('/responsable-formation/sessions', sessionData);
-      return response.data;
-    } catch (error) {
-      console.error('Error creating session:', error);
-      return {
-        error: error.message || 'Une erreur s\'est produite lors de la création de la session',
-        message: 'Erreur lors de la création de la session',
-        data: null
-      };
-    }
-  },
-
   // Presence stats data
   getPresenceStats: async () => {
     try {
@@ -792,3 +753,57 @@ export const testApiConnection = async () => {
 
 // Do NOT auto-call the test function here - it will be called from App.jsx
 // testApiConnection();
+
+// --- Authenticated Formation and Session Creation ---
+export const createFormation = async (formData) => {
+  try {
+    // No need for AbortController here as Axios has its own timeout and cancellation
+    const response = await apiClient.post(`${rfPrefix}/formations`, formData, {
+      // Axios will automatically handle FormData content type
+      // Ensure your Laravel backend can handle multipart/form-data for this route if images are included
+    });
+    return response.data; // Axios wraps the response in a data property
+  } catch (error) {
+    console.error('Error in createFormation (authenticated):', error);
+    // Re-throw or handle error to propagate to UI for detailed messages
+    // The interceptor already logs details, here we ensure the error object from Axios is passed along
+    if (error.response && error.response.data) {
+      // If backend provides a specific error structure, return it
+      return Promise.reject({ 
+        message: error.response.data.message || error.message, 
+        error: error.response.data.errors || error.response.statusText,
+        status: error.response.status,
+        data: error.response.data // Full backend error response
+      });
+    }
+    return Promise.reject({ 
+        message: error.message, 
+        error: error.code || 'NetworkError',
+        status: null, 
+        data: null 
+    });
+  }
+};
+
+export const createSession = async (sessionData) => {
+  try {
+    const response = await apiClient.post(`${rfPrefix}/sessions`, sessionData);
+    return response.data;
+  } catch (error) {
+    console.error('Error in createSession (authenticated):', error);
+    if (error.response && error.response.data) {
+      return Promise.reject({ 
+        message: error.response.data.message || error.message, 
+        error: error.response.data.errors || error.response.statusText,
+        status: error.response.status,
+        data: error.response.data
+      });
+    }
+    return Promise.reject({ 
+        message: error.message, 
+        error: error.code || 'NetworkError',
+        status: null,
+        data: null 
+    });
+  }
+};

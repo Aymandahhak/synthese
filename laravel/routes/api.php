@@ -76,34 +76,21 @@ Route::prefix('public')->group(function () {
     
     Route::get('/responsable-formation/formations', function() {
         // Temporary placeholder response
+        // THIS SHOULD LATER POINT TO ResponsableFormationController@index
         return response()->json([
-            'message' => 'Liste des formations récupérée avec succès',
+            'message' => 'Liste des formations récupérée avec succès (public placeholder)',
             'data' => [
                 [
                     'id' => 1,
-                    'titre' => 'Formation React',
-                    'description' => 'Apprendre React.js',
-                    'date_debut' => '2023-06-01',
-                    'date_fin' => '2023-06-15',
-                    'lieu' => 'Casablanca',
-                    'capacite_max' => 20,
-                    'statut' => 'planifiee'
-                ],
-                [
-                    'id' => 2,
-                    'titre' => 'Formation Laravel',
-                    'description' => 'Apprendre Laravel',
-                    'date_debut' => '2023-07-01',
-                    'date_fin' => '2023-07-15',
-                    'lieu' => 'Rabat',
-                    'capacite_max' => 15,
-                    'statut' => 'en_cours'
+                    'titre' => 'Formation React (Public)',
+                    // ... other fields
                 ]
             ]
         ]);
     });
     
-    // Direct POST route for creating formations - guaranteed to work
+    // COMMENT OUT or REMOVE this placeholder POST route as it doesn't save to DB
+    /*
     Route::post('/responsable-formation/formations', function(Request $request) {
         // Validate the incoming request
         $validatedData = $request->validate([
@@ -117,7 +104,7 @@ Route::prefix('public')->group(function () {
 
         // Return success response with the data
         return response()->json([
-            'message' => 'Formation créée avec succès',
+            'message' => 'Formation créée avec succès (Placeholder - Not Saved)',
             'data' => array_merge($validatedData, [
                 'id' => rand(100, 999), // Generate random ID
                 'statut' => 'pending',
@@ -125,8 +112,10 @@ Route::prefix('public')->group(function () {
             ])
         ], 201);
     });
+    */
     
     // Fallback route for creating formations directly - also works for development
+    // Consider removing or securing this too if it's not saving to DB or if controller is preferred
     Route::post('/responsable-formation/formations-direct', function(Request $request) {
         // Validate the incoming request
         $validatedData = $request->validate([
@@ -267,32 +256,52 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/formateurs-list', [SessionController::class, 'getFormateurs'])->name('formateurs.list');
     });
 
-    // --- Responsable de Formation Specific Routes ---
-    Route::middleware('role:responsable_formation')->prefix('responsable-formation')->group(function () {
-        
-        // Dashboard
-        Route::get('/dashboard', [ResponsableFormationController::class, 'dashboard'])->name('rf.dashboard');
-        
-        // Gestion des Sessions
-        Route::apiResource('/sessions', SessionFormationController::class)->names('rf.sessions');
-        // Add specific actions if needed, e.g., POST /sessions/{id}/validate
-        // Route::post('/sessions/{session}/validate', [SessionFormationController::class, 'validateSession'])->name('rf.sessions.validate');
+    // --- Responsable Formation Specific Routes ---
+    // This group can be more specific if needed, e.g., Route::prefix('responsable-formation')->middleware('role:responsable_formation')
+    
+    // GET Formations list for the authenticated responsable
+    Route::get('/responsable-formation/formations', [ResponsableFormationController::class, 'index'])
+         ->name('responsable-formation.formations.index'); // Add name for clarity
+         
+    // POST to create a new Formation for the authenticated responsable
+    Route::post('/responsable-formation/formations', [ResponsableFormationController::class, 'store'])
+         ->name('responsable-formation.formations.store');
 
-        // Feedback
-        Route::get('/feedbacks', [FeedbackController::class, 'index'])->name('rf.feedbacks.index');
-        Route::get('/feedbacks/{feedback}', [FeedbackController::class, 'show'])->name('rf.feedbacks.show');
-        Route::get('/sessions/{session}/feedbacks', [FeedbackController::class, 'getBySession'])->name('rf.feedbacks.by_session');
-        
-        // Présences
-        Route::get('/presences', [PresenceController::class, 'index'])->name('rf.presences.index'); // Filter by session_id in query
-        Route::post('/presences', [PresenceController::class, 'storeOrUpdate'])->name('rf.presences.store'); // Bulk update/create?
-        Route::get('/presences/stats', [PresenceController::class, 'getSessionStats'])->name('rf.presences.stats');
+    // GET a specific formation
+    Route::get('/responsable-formation/formations/{formation}', [ResponsableFormationController::class, 'show'])
+         ->name('responsable-formation.formations.show');
 
-        // Reports
-        Route::get('/reports/sessions', [ReportController::class, 'downloadSessionsReport'])->name('rf.reports.sessions');
-        Route::get('/reports/feedbacks', [ReportController::class, 'downloadFeedbacksReport'])->name('rf.reports.feedbacks');
-        Route::get('/reports/presences', [ReportController::class, 'downloadPresencesReport'])->name('rf.reports.presences');
-    });
+    // PUT to update a specific formation
+    Route::put('/responsable-formation/formations/{formation}', [ResponsableFormationController::class, 'update'])
+         ->name('responsable-formation.formations.update');
+         
+    // DELETE a specific formation
+    Route::delete('/responsable-formation/formations/{formation}', [ResponsableFormationController::class, 'destroy'])
+         ->name('responsable-formation.formations.destroy');
+
+    // --- Session Routes for Responsable Formation ---
+    // POST to create a new Session for a Formation
+    Route::post('/responsable-formation/sessions', [\App\Http\Controllers\Api\ResponsableFormation\SessionController::class, 'store'])
+         ->name('responsable-formation.sessions.store');
+
+    // GET list of sessions (can be filtered, e.g., by formation_id)
+    // You might want to add an index method to your SessionController if not already present
+    // Route::get('/responsable-formation/sessions', [\App\Http\Controllers\Api\ResponsableFormation\SessionController::class, 'index'])
+    //      ->name('responsable-formation.sessions.index');
+
+    // GET a specific session
+    // Route::get('/responsable-formation/sessions/{session}', [\App\Http\Controllers\Api\ResponsableFormation\SessionController::class, 'show'])
+    //      ->name('responsable-formation.sessions.show');
+
+    // PUT to update a specific session
+    // Route::put('/responsable-formation/sessions/{session}', [\App\Http\Controllers\Api\ResponsableFormation\SessionController::class, 'update'])
+    //      ->name('responsable-formation.sessions.update');
+
+    // DELETE a specific session
+    // Route::delete('/responsable-formation/sessions/{session}', [\App\Http\Controllers\Api\ResponsableFormation\SessionController::class, 'destroy'])
+    //      ->name('responsable-formation.sessions.destroy');
+
+    // --- End of Responsable Formation Specific Routes ---
 
     // --- General Feedback Routes (for formateurs to submit feedback) ---
     Route::apiResource('/feedbacks', FeedbackController::class)->except(['index'])->middleware('role:formateur_animateur,formateur_participant,admin');

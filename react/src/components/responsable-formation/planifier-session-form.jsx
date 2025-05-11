@@ -6,7 +6,7 @@ import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Calendar, Check, MapPin, CalendarIcon, ChevronsUpDown, Clock } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { publicApi } from "@/services/api"
+import { createSession } from "@/services/api"
 import { useSessions } from "@/hooks/useSessions"
 import { useToast } from "@/components/responsable-formation/ui/use-toast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/responsable-formation/ui/card"
@@ -171,81 +171,130 @@ export default function PlanifierSessionForm() {
   const onSubmit = async (e) => {
     e.preventDefault();
     
-    if (Object.keys(validationErrors).length > 0) {
-      toast.error("Veuillez corriger les erreurs de validation");
+    // Basic validation before proceeding
+    if (!formData.formation_id) {
+      toast.error("Veuillez sélectionner une formation.");
       return;
+    }
+    if (!formData.titre || formData.titre.trim() === "") {
+      toast.error("Le titre de la session est requis.");
+      return;
+    }
+    if (!formData.lieu || formData.lieu.trim() === "") {
+      toast.error("Le lieu de la session est requis.");
+      return;
+    }
+    if (!formData.date_debut) { // Assuming date_debut maps to 'date' for the session
+      toast.error("La date de début de la session est requise.");
+      return;
+    }
+    if (!formData.formateur_animateur_id) {
+        toast.error("Veuillez sélectionner un formateur animateur.");
+        return;
+    }
+
+    // Time validation (example, adjust as needed)
+    if (startTime && endTime) {
+      const [startHour, startMinute] = startTime.split(':').map(Number);
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+      if (startHour > endHour || (startHour === endHour && startMinute >= endMinute)) {
+        toast.error("L'heure de fin doit être après l'heure de début.");
+        return;
+      }
     }
 
     setIsSubmitting(true);
+    setIsLoading(true); // Added to match the finally block
 
     try {
-      // Get selected trainer info
-      const selectedTrainerInfo = trainers.filter(trainer => selectedTrainers.includes(trainer.id));
-      try {
-        const selectedLocation = locations.find(loc => loc.id === formData.location);
-        const selectedTheme = themes.find(theme => theme.id === formData.theme);
+      const selectedFormation = formations.find(f => f.id.toString() === formData.formation_id.toString());
+      const selectedFormateur = formateurs.find(f => f.id.toString() === formData.formateur_animateur_id.toString());
 
-        // Format date to ISO string for API
-        const formattedDate = format(sessionDate, 'yyyy-MM-dd');
+      const sessionData = {
+        formation_id: formData.formation_id,
+        titre: formData.titre,
+        description: formData.description || "",
+        lieu: formData.lieu,
+        date_debut: formData.date_debut,
+        date_fin: formData.date_fin,
+        heure_debut: startTime,
+        heure_fin: endTime,
+        capacite_max: formData.capacite_max || 20,
+        salle: formData.salle || "",
+        equipement: formData.equipement || "",
+        details_hebergement: formData.details_hebergement || "",
+        details_restauration: formData.details_restauration || "",
+        formateur_animateur_id: formData.formateur_animateur_id,
+        statut: "planifiee"
+      };
 
-        // Combine all form data
-        const sessionData = {
-          titre: formData.titre || form.getValues().title,
-          theme_id: formData.theme || form.getValues().theme,
-          theme_name: selectedTheme?.name || "",
-          formateur_id: selectedTrainers[0], // For now, just use the first selected trainer
-          formateur_nom: selectedTrainerInfo[0]?.name || "",
-          lieu: selectedLocation?.name || form.getValues().location || "",
-          ressources: formData.resources || form.getValues().resources || "",
-          date: formattedDate,
-          heure_debut: startTime,
-          heure_fin: endTime,
-          statut: "planifiee"
-        };
+      console.log("Données de session envoyées à l'API:", sessionData);
 
-        console.log("Preparing to submit session data:", sessionData);
+      const response = await createSession(sessionData);
+      console.log("Réponse API createSession:", response);
 
-        try {
-          setIsLoading(true);
-          
-          // Send API request
-          const response = await publicApi.createSession(sessionData);
-          
-          toast.success("Session planifiée", {
-            description: `La session "${formData.titre}" a été créée avec succès.`
-          });
-          
-          // Refresh sessions data
-          if (refreshSessions) {
-            refreshSessions();
-          }
+      if (response && response.id) {
+        toast.success("Session planifiée avec succès!", {
+          description: `La session "${response.titre || formData.titre}" a été créée.`
+        });
 
-          // Reset form
-          form.reset();
-          setSelectedTrainers([]);
-          setSessionDate(new Date());
-          setStartTime("09:00");
-          setEndTime("17:00");
-          
-          // Redirect to sessions list after a short delay
-          setTimeout(() => {
-            navigate('/profile/sessions');
-          }, 1500);
-        } catch (error) {
-          console.error("Error in session form submission:", error);
-          toast.error("Erreur lors de la soumission du formulaire de session");
-        } finally {
-          setIsLoading(false);
+        if (refreshSessions) {
+          console.log('Rafraîchissement de la liste des sessions après création...');
+          await refreshSessions();
         }
-      } catch (error) {
-        console.error("Error preparing session data:", error);
-        toast.error("Erreur lors de la préparation des données de session");
+
+        // Reset form fields (optional, or navigate away)
+        // form.reset(); // If using react-hook-form
+        // Reset local formData state if not using react-hook-form for all fields
+        setFormData({
+            formation_id: "", titre: "", description: "", date_debut: "", date_fin: "",
+            lieu: "", capacite_max: 20, salle: "", equipement: "",
+            details_hebergement: "", details_restauration: "", formateur_animateur_id: "",
+        });
+        setStartTime("09:00");
+        setEndTime("17:00");
+
+        setTimeout(() => {
+          navigate('/responsable-formation/sessions'); // Adjusted path
+        }, 1500);
+      } else {
+        const apiErrorMessage = response?.message || response?.error || "La planification de la session a échoué. Réponse inattendue.";
+        console.error("Échec de la planification de session (resolved non-error):", apiErrorMessage, response);
+        toast.error("Échec de la planification", { description: apiErrorMessage });
+        
+        if (response && response.errors) {
+            Object.entries(response.errors).forEach(([field, messages]) => {
+                if (Array.isArray(messages)) {
+                    messages.forEach(message => {
+                        toast.error(`Erreur (${field}): ${message}`, { duration: 5000 });
+                    });
+                }
+            });
+        }
       }
+
     } catch (error) {
-      console.error("Error getting trainer info:", error);
-      toast.error("Erreur lors de la récupération des informations du formateur");
+      console.error("Erreur interne lors de la planification de session:", error);
+      let mainErrorMessage = error?.data?.message || error?.message || "Une erreur interne s'est produite.";
+      toast.error("Échec de la planification", { description: mainErrorMessage });
+
+      if (error && error.data && error.data.error) {
+        const fieldErrors = error.data.error;
+        if (typeof fieldErrors === 'object' && fieldErrors !== null) {
+             Object.entries(fieldErrors).forEach(([field, messages]) => {
+                if (Array.isArray(messages)) {
+                    messages.forEach(message => {
+                        toast.error(`Erreur (${field}): ${message}`, { duration: 5000 });
+                    });
+                }
+            });
+        } else if (typeof fieldErrors === 'string') {
+            toast.error(fieldErrors, {duration: 5000});
+        }
+      } 
     } finally {
       setIsSubmitting(false);
+      setIsLoading(false); // Ensure isLoading is also reset
     }
   };
 

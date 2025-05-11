@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useAuth } from '../../contexts/AuthContext'; // Corrected path
 import { useTheme } from "@/contexts/ThemeContext";
 import './Header.css'; // Import the external CSS file
+import ThreeDLogo from './ThreeDLogo';
 
 // BB8 theme toggle component with the same functionality but new styling
 const ThemeToggle = () => {
@@ -137,7 +138,7 @@ export default function Header() {
   // Navigation items
   const navItems = [
     { name: "Home", path: "/" },
-    { name: "About", path: "/about" },
+    { name: "About", path: "/" },
     { name: "Profile", path: "/profile" },
   ];
 
@@ -153,13 +154,7 @@ export default function Header() {
           className="logo-container"
         >
           <Link to="/">
-            <img
-              src="/logo-ofppt-1.jpg"
-              alt="OFPPT Logo"
-              width={80}
-              height={80}
-              className="spinning-logo"
-            />
+            <ThreeDLogo width={80} height={80} />
           </Link>
         </div>
 

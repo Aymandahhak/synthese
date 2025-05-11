@@ -16,16 +16,21 @@ class SessionFormation extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'formation_id',
         'titre',
         'description',
         'date_debut',
         'date_fin',
-        'formateur_user_id',
-        'etat',
-        'location_type',
-        'location_details',
-        'max_participants',
-        'category',
+        'heure_debut',
+        'heure_fin',
+        'lieu',
+        'salle',
+        'equipement',
+        'capacite_max',
+        'formateur_animateur_id',
+        'statut',
+        'details_hebergement',
+        'details_restauration',
     ];
 
     /**
@@ -36,15 +41,23 @@ class SessionFormation extends Model
     protected $casts = [
         'date_debut' => 'datetime',
         'date_fin' => 'datetime',
-        'max_participants' => 'integer',
+        'capacite_max' => 'integer',
     ];
 
     /**
      * Get the formateur that owns the session.
      */
-    public function formateur(): BelongsTo
+    public function formateurAnimateur(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'formateur_user_id');
+        return $this->belongsTo(User::class, 'formateur_animateur_id');
+    }
+
+    /**
+     * Get the formation that this session belongs to.
+     */
+    public function formation(): BelongsTo
+    {
+        return $this->belongsTo(Formation::class, 'formation_id');
     }
 
     /**
