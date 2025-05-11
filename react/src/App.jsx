@@ -21,6 +21,13 @@ import Documents from './pages/responsable-formation/Documents';
 import Logistics from './pages/responsable-formation/Logistics';
 import ReportsPage from './pages/responsable-formation/Reports';
 import LoginPage from './pages/login/LoginPage';
+//responsable_cdc
+import FormationPage from './pages/responsable-cdc/FormationPage';
+import ResponsableCdcDashboard from './pages/responsable-cdc/ResponsableCdcDashboard';
+import SideBar from './pages/responsable-cdc/SideBar';
+import ResponsablePage from './pages/responsable-cdc/ResponsablePage';
+import FormateursFormationPage from './pages/responsable-cdc/FormateursFormationPage';
+
 
 // RequireAuth component
 function RequireAuth({ children }) {
@@ -76,6 +83,16 @@ function App() {
             <Route path="logistics" element={<Logistics />} />
             <Route path="rapports" element={<ReportsPage />} />
           </Route>
+          {/* responsable_cdc */}
+           <Route path="/responsable-cdc">
+                <Route path="formation" element={<FormationPage />} />
+                <Route path="dashboard" element={<ResponsableCdcDashboard />} />
+                <Route path="sidebar" element={<SideBar />} />
+                <Route path="responsable" element={< ResponsablePage/>} />
+                {/* <Route path="formateur-formations/:formationId" element={<FormateursFormationPage />} /> */}
+            </Route>
+            <Route path="/formateurs-formation/:formationId" element={<FormateursFormationPage />} />
+
         </Routes>
       </AuthProvider>
     </ThemeProvider>
