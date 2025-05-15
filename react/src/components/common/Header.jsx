@@ -153,9 +153,9 @@ export default function Header() {
         <div
           className="logo-container"
         >
-          <Link to="/">
+          {/* <Link to="/">
             <ThreeDLogo width={80} height={80} />
-          </Link>
+          </Link> */}
         </div>
 
         <nav className="hidden md:block">

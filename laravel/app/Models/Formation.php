@@ -50,7 +50,7 @@ class Formation extends Model
     {
         return $this->belongsTo(ResponsableFormation::class, 'responsable_id');
     }
-
+    
     /**
      * Get the region this formation belongs to.
      */
@@ -70,11 +70,9 @@ class Formation extends Model
     /**
      * Get the formateurs assigned to this formation.
      */
-    public function formateurs(): BelongsToMany
+    public function formateurs(): HasMany
     {
-        return $this->belongsToMany(User::class, 'formateur_formation', 'formation_id', 'user_id')
-                    ->withPivot('statut', 'date_assignation')
-                    ->withTimestamps();
+        return $this->hasMany(Formateur::class);
     }
 
     /**
@@ -91,5 +89,10 @@ class Formation extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(Document::class);
+    }
+
+    public function formateurAnimateurs()
+    {
+        return $this->hasMany(FormateurAnimateur::class);
     }
 } 

@@ -54,7 +54,10 @@ export default function LoginPage() {
       // For other roles, use the standard dashboard path
       else if (role === 'admin') {
         navigate('/admin/dashboard');
-      } 
+      }
+      else if (role === 'responsable_cdc') {
+        navigate('/responsable-cdc/dashboard');
+      }
       else {
         // Convert role_name format (with underscore) to URL format (with hyphen)
         const routeRole = role.replace('_', '-');

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Formateur extends Model
 {
@@ -27,20 +28,26 @@ class Formateur extends Model
         'region_id',
         'filiere_id',
         'matricule',
+        'formation_id',
     ];
 
     /**
-     * Get the user that is the formateur.
+     * Get the user that owns the formateur.
      */
-    public function user()
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    public function formation()
+{
+    return $this->belongsTo(Formation::class);
+}
+
     /**
      * Get the region associated with the formateur.
      */
-    public function region()
+    public function region(): BelongsTo
     {
         return $this->belongsTo(Region::class);
     }
@@ -48,7 +55,7 @@ class Formateur extends Model
     /**
      * Get the filiere associated with the formateur.
      */
-    public function filiere()
+    public function filiere(): BelongsTo
     {
         return $this->belongsTo(Filiere::class);
     }

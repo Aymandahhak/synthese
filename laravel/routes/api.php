@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\Responsablecdc\FormationController;
 use App\Http\Controllers\Api\Responsablecdc\FormateurFormationController;
 use App\Http\Controllers\Api\Responsablecdc\FormateurAnimateurController; 
 use App\Http\Controllers\Api\Responsablecdc\UserController; 
+use App\Http\Controllers\Api\ResponsableCdc\GereFormationController;
 
 
 
@@ -181,8 +182,8 @@ Route::options('/admin/dashboard-stats', function () {
 });
 
 // Authentication routes
-Route::post('/login', [AuthController::class, 'login']);
-Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logout']);
+Route::post('/login', [AuthController::class, 'login'])->name('login');
+Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Authenticated user route (general)
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -337,14 +338,6 @@ Route::middleware('auth:sanctum')->group(function () {
         // Add more routes as needed
     });
     
-    // Responsable CDC routes
-    Route::middleware('role:responsable_cdc')->prefix('responsable-cdc')->group(function () {
-        Route::get('/dashboard', function() {
-            return response()->json(['message' => 'Responsable CDC Dashboard']);
-        });
-        // Add more routes as needed
-    });
-
     // Routes pour le Responsable de Formation
     Route::middleware(['auth:sanctum', 'role:responsable_formation'])->prefix('responsable')->group(function () {
         // Formations management
@@ -390,6 +383,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
 });
 
+// Public routes for ResponsableCdc - No authentication required
+
 
 //responsable cdc
 
@@ -417,4 +412,39 @@ Route::apiResource('formateurs-animateurs', FormateurAnimateurController::class)
 
 //user
 Route::get('/users', [UserController::class, 'index']);
+
+// Routes pour la gestion des formations
+Route::prefix('responsable-cdc')->group(function () {
+    // Formation routes
+    Route::get('/gere-formation', [GereFormationController::class, 'index']);
+    Route::post('/gere-formation', [GereFormationController::class, 'store']);
+    Route::put('/gere-formation/{id}', [GereFormationController::class, 'update']);
+    Route::delete('/gere-formation/{id}', [GereFormationController::class, 'destroy']);
+
+    // Region routes
+    Route::get('/regions', [GereFormationController::class, 'getRegions']);
+    Route::post('/regions', [GereFormationController::class, 'storeRegion']);
+
+    // Filiere routes
+    Route::get('/filieres', [GereFormationController::class, 'getFilieres']);
+    Route::post('/filieres', [GereFormationController::class, 'storeFiliere']);
+
+    // User routes
+    Route::get('/users', [GereFormationController::class, 'getUsers']);
+    Route::post('/users', [GereFormationController::class, 'storeUser']);
+    Route::put('/users/{id}', [GereFormationController::class, 'updateUser']);
+    Route::delete('/users/{id}', [GereFormationController::class, 'deleteUser']);
+    Route::get('/users-with-formateur', [GereFormationController::class, 'getUsersWithFormateur']);
+
+    // Formateur routes
+    Route::get('/formateurs', [GereFormationController::class, 'getFormateurs']);
+    Route::post('/formateurs', [GereFormationController::class, 'storeFormateur']);
+    Route::put('/formateurs/{id}', [GereFormationController::class, 'updateFormateur']);
+    Route::delete('/formateurs/{id}', [GereFormationController::class, 'deleteFormateur']);
+
+    // Formateur Animateur routes
+    Route::get('/formateur-animateur', [GereFormationController::class, 'getFormateurAnimateurs']);
+    Route::post('/formateur-animateur', [GereFormationController::class, 'assignFormateurAnimateur']);
+    Route::delete('/formateur-animateur/{id}', [GereFormationController::class, 'removeFormateurAnimateur']);
+});
 

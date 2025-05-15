@@ -16,10 +16,13 @@ class FormateurAnimateur extends Model
     // Colonnes que tu souhaites pouvoir mass-assignable
     protected $fillable = [
         'formation_id',
-        'formateur_animateur_id',
         'nom',
         'prenom',
+        'formateur_animateur_id'
     ];
 
-   
+    public function formation()
+    {
+        return $this->belongsTo(Formation::class, 'formation_id');
+    }
 }

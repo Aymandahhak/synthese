@@ -1,241 +1,274 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaPlus, FaTrash, FaUserPlus } from 'react-icons/fa';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import SideBar from './SideBar'; 
+import { useParams } from 'react-router-dom';
+import axios from 'axios';
+import { Table, Button, Toast, Card } from 'react-bootstrap';
+import { BsTrash, BsPersonPlusFill, BsSearch, BsCheckCircleFill } from 'react-icons/bs';
+
 
 const FormateursFormationPage = () => {
   const { formationId } = useParams();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const formationTitle = location.state?.formationTitle || 'Formation';
-
-  const [formateurs, setFormateurs] = useState([]);
   const [users, setUsers] = useState([]);
-  const [selectedFormateur, setSelectedFormateur] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showModal, setShowModal] = useState(false);
+  const [addedUsers, setAddedUsers] = useState(new Set());
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastVariant, setToastVariant] = useState('success');
+  const [existingFormateurs, setExistingFormateurs] = useState(new Map());
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
+    console.log('Formation ID from URL:', formationId);
+  }, [formationId]);
+
     const fetchData = async () => {
       try {
-        setIsLoading(true);
-        const response = await fetch(`http://127.0.0.1:8000/api/formateur-formations?formation_id=${formationId}`);
-        const data = await response.json();
-        if (data.success) {
-          setFormateurs(data.data);
-        } else {
-          setError('Erreur lors du chargement des formateurs');
-        }
-
-        const usersResponse = await fetch('http://127.0.0.1:8000/api/users');
-        const usersData = await usersResponse.json();
-        if (usersData.success) {
-          setUsers(usersData.data);
-        }
-
-        setIsLoading(false);
+      setLoading(true);
+      
+      // Fetch users from the new API endpoint and filter for role: null
+      const usersResponse = await axios.get('http://127.0.0.1:8000/api/users');
+      const filteredUsers = usersResponse.data.data.filter(user => user.role === null);
+      
+      // Fetch existing formateurs for this formation
+      const formateursResponse = await axios.get('http://127.0.0.1:8000/api/responsable-cdc/formateurs');
+      
+      // Set filtered users
+      setUsers(filteredUsers);
+      
+      // Create a Map of user_id to formateur data
+      const formateurMap = new Map();
+      formateursResponse.data.data
+        .filter(formateur => formateur.formation_id === parseInt(formationId))
+        .forEach(formateur => formateurMap.set(formateur.user_id, formateur));
+      
+      setExistingFormateurs(formateurMap);
+      setAddedUsers(new Set(formateurMap.keys()));
+      setLoading(false);
       } catch (err) {
-        console.error('Erreur:', err);
         setError('Erreur lors du chargement des données');
-        setIsLoading(false);
+      setLoading(false);
+      console.error('Error fetching data:', err);
       }
     };
 
-    if (formationId) fetchData();
+  useEffect(() => {
+    fetchData();
   }, [formationId]);
 
-  const handleFormateurChange = (e) => setSelectedFormateur(e.target.value);
-
-  const handleAddFormateur = async (e) => {
-    e.preventDefault();
-    if (!selectedFormateur) {
-      alert('Veuillez sélectionner un utilisateur');
-      return;
-    }
-
+  const handleAddFormateur = async (userId) => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/formateur-formations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const formateurData = {
+        user_id: userId,
           formation_id: parseInt(formationId),
-          user_id: parseInt(selectedFormateur),
-        }),
-      });
+        specialite: 'dev',
+        matricule: 'E' + Math.floor(1000 + Math.random() * 9000)
+      };
 
-      const data = await response.json();
+      console.log('Sending request with:', formateurData);
 
-      if (data.success) {
-        const updatedResponse = await fetch(`http://127.0.0.1:8000/api/formateur-formations?formation_id=${formationId}`);
-        const updatedData = await updatedResponse.json();
-        if (updatedData.success) {
-          setFormateurs(updatedData.data);
-        }
-        setShowModal(false);
-        setSelectedFormateur('');
+      const response = await axios.post('http://127.0.0.1:8000/api/responsable-cdc/formateurs', formateurData);
+
+      console.log('Response:', response.data);
+
+      if (response.data.status === 'success') {
+        // Update the existingFormateurs Map with the new formateur data
+        setExistingFormateurs(prev => new Map(prev).set(userId, response.data.data));
+        setAddedUsers(prev => new Set([...prev, userId]));
+        setToastMessage('Formateur ajouté avec succès');
+        setToastVariant('success');
       } else {
-        alert("Erreur lors de l'ajout du formateur");
+        setToastMessage(`Erreur: ${response.data.message || 'Erreur inconnue'}`);
+        setToastVariant('danger');
       }
     } catch (err) {
-      console.error('Erreur:', err);
-      alert("Erreur lors de l'ajout du formateur");
+      console.error('Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
+      
+      const errorMessage = err.response?.data?.message 
+        || err.response?.data?.error 
+        || err.message 
+        || 'Erreur lors de l\'ajout du formateur';
+      
+      setToastMessage(`Erreur: ${errorMessage}`);
+      setToastVariant('danger');
     }
+    setShowToast(true);
   };
 
-  const handleDeleteFormateur = async (formateurId) => {
-    if (window.confirm('Êtes-vous sûr de vouloir retirer ce formateur de la formation?')) {
-      try {
-        const response = await fetch(`http://127.0.0.1:8000/api/formateur-formations/${formateurId}`, {
-          method: 'DELETE',
-        });
-
-        if (response.ok) {
-          setFormateurs(formateurs.filter(formateur => formateur.id !== formateurId));
-        } else {
-          alert('Erreur lors de la suppression du formateur');
-        }
-      } catch (err) {
-        console.error('Erreur:', err);
-        alert('Erreur lors de la suppression du formateur');
+  const handleRemoveFormateur = async (userId) => {
+    try {
+      const formateur = existingFormateurs.get(userId);
+      if (!formateur || !formateur.id) {
+        throw new Error('Formateur non trouvé');
       }
+
+      const response = await axios.delete(`http://127.0.0.1:8000/api/responsable-cdc/formateurs/${formateur.id}`);
+
+      if (response.data.status === 'success') {
+        // Remove from both sets
+        setExistingFormateurs(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(userId);
+          return newMap;
+        });
+        setAddedUsers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(userId);
+          return newSet;
+        });
+        setToastMessage('Formateur retiré avec succès');
+        setToastVariant('success');
+        } else {
+        setToastMessage(`Erreur: ${response.data.message || 'Erreur inconnue'}`);
+        setToastVariant('danger');
+      }
+    } catch (err) {
+      console.error('Error removing formateur:', err);
+      setToastMessage(`Erreur lors de la suppression: ${err.message}`);
+      setToastVariant('danger');
     }
+    setShowToast(true);
   };
 
-  const handleBack = () => navigate(-1);
+  // Debug log to check if formationId is available
+  useEffect(() => {
+    console.log('Current formationId:', formationId);
+  }, [formationId]);
 
-  if (isLoading) {
-    return (
-      <div className="d-flex">
-        <SideBar />
-        <div className="container mt-5 flex-grow-1">
-          <div className="d-flex justify-content-center">
+  const filteredUsers = users.filter(user => 
+    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) return (
+    <div className="d-flex justify-content-center align-items-center vh-100">
             <div className="spinner-border text-primary" role="status">
               <span className="visually-hidden">Chargement...</span>
-            </div>
-          </div>
         </div>
       </div>
     );
-  }
 
-  if (error) {
-    return (
-      <div className="d-flex">
-        <SideBar />
-        <div className="container mt-5 flex-grow-1">
-          <div className="alert alert-danger">{error}</div>
-          <button className="btn btn-primary" onClick={handleBack}>
-            <FaArrowLeft className="me-2" /> Retour
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (error) return (
+    <div className="alert alert-danger m-3">{error}</div>
+  );
 
   return (
     <div className="d-flex">
-      <SideBar /> {/* ✅ Ajouté ici */}
-      <div className="container mt-4 flex-grow-1">
+      <SideBar />
+      <div className="flex-grow-1 bg-light min-vh-100">
+        <div className="container-fluid p-4">
+          {/* Header Section */}
         <div className="d-flex justify-content-between align-items-center mb-4">
-          <div>
-            <button className="btn btn-outline-primary mb-3" onClick={handleBack}>
-              <FaArrowLeft className="me-2" /> Retour
-            </button>
-            <h2 className="mt-2">Formateurs pour: {formationTitle}</h2>
-            <p className="text-muted">Gérez les formateurs associés à cette formation</p>
+            <h4 className="mb-0">Gestion des Formateurs</h4>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-            <FaUserPlus className="me-2" /> Ajouter un formateur
-          </button>
-        </div>
 
-        <div className="card shadow">
-          <div className="card-body">
-            {formateurs.length > 0 ? (
+          {/* Search Bar */}
+          <Card className="mb-4 border-0 shadow-sm">
+            <Card.Body>
+              <div className="input-group">
+                <span className="input-group-text border-0 bg-white">
+                  <BsSearch className="text-muted" />
+                </span>
+                <input
+                  type="text"
+                  className="form-control border-0 shadow-none"
+                  placeholder="Rechercher un formateur..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+        </div>
+            </Card.Body>
+          </Card>
+
+          {/* Users Table */}
+          <Card className="border-0 shadow-sm">
+            <Card.Body className="p-0">
               <div className="table-responsive">
-                <table className="table table-hover">
-                  <thead className="bg-primary text-white">
+                <Table hover className="table align-middle mb-0">
+                  <thead className="bg-light">
                     <tr>
-                      <th>Nom</th>
-                      <th>Spécialité</th>
-                      <th>Matricule</th>
-                      <th>Filière</th>
-                      <th>Région</th>
-                      <th>Actions</th>
+                      <th className="border-0 ps-4">Formateur</th>
+                      <th className="border-0">Email</th>
+                      <th className="border-0 text-end pe-4">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {formateurs.map((formateur) => (
-                      <tr key={formateur.id}>
-                        <td>{formateur.formateur_name}</td>
-                        <td>{formateur.specialite || 'N/A'}</td>
-                        <td>{formateur.matricule || 'N/A'}</td>
-                        <td>{formateur.filiere_nom || 'N/A'}</td>
-                        <td>{formateur.region_nom || 'N/A'}</td>
-                        <td>
-                          <button 
-                            className="btn btn-sm btn-outline-danger" 
-                            onClick={() => handleDeleteFormateur(formateur.id)}
-                          >
-                            <FaTrash /> Retirer
-                          </button>
+                    {filteredUsers.map((user) => (
+                      <tr key={user.id}>
+                        <td className="ps-4">
+                          <div className="d-flex align-items-center">
+                            <div className="bg-primary bg-opacity-10 rounded-circle p-2 me-3">
+                              <BsPersonPlusFill className="text-primary" />
+                            </div>
+                            <div>{user.name}</div>
+                          </div>
+                        </td>
+                        <td className="text-muted">{user.email}</td>
+                        <td className="text-end pe-4">
+                          <div className="d-flex gap-2 justify-content-end">
+                            <Button
+                              variant={existingFormateurs.has(user.id) ? "outline-success" : "primary"}
+                              size="sm"
+                              onClick={() => handleAddFormateur(user.id)}
+                              disabled={existingFormateurs.has(user.id)}
+                              className="d-flex align-items-center px-3"
+                            >
+                              {existingFormateurs.has(user.id) ? (
+                                <>
+                                  <BsCheckCircleFill className="me-2" />
+                                  Ajouté
+                                </>
+                              ) : (
+                                <>
+                                  <BsPersonPlusFill className="me-2" />
+                                  Ajouter
+                                </>
+                              )}
+                            </Button>
+                            {existingFormateurs.has(user.id) && (
+                              <Button
+                                variant="outline-danger"
+                                size="sm"
+                                onClick={() => handleRemoveFormateur(user.id)}
+                                className="px-3"
+                              >
+                                <BsTrash />
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="alert alert-info">
-                Aucun formateur n'est associé à cette formation.
+                </Table>
+                {filteredUsers.length === 0 && (
+                  <div className="text-center py-5 text-muted">
+                    Aucun utilisateur trouvé
               </div>
             )}
           </div>
+            </Card.Body>
+          </Card>
         </div>
 
-        {showModal && (
-          <div className="modal d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-            <div className="modal-dialog">
-              <div className="modal-content">
-                <div className="modal-header bg-primary text-white">
-                  <h5 className="modal-title">Ajouter un formateur</h5>
-                  <button type="button" className="btn-close btn-close-white" onClick={() => setShowModal(false)}></button>
-                </div>
-                <div className="modal-body">
-                  <form onSubmit={handleAddFormateur}>
-                    <div className="mb-3">
-                      <label htmlFor="formateur" className="form-label">Sélectionner un utilisateur</label>
-                      <select
-                        id="formateur"
-                        className="form-select"
-                        value={selectedFormateur}
-                        onChange={handleFormateurChange}
-                        required
-                      >
-                        <option value="">-- Choisir un utilisateur --</option>
-                        {users.map(user => (
-                          <option key={user.id} value={user.id}>
-                            {user.name} ({user.role?.name || 'Sans rôle'})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="d-flex justify-content-end">
-                      <button type="button" className="btn btn-secondary me-2" onClick={() => setShowModal(false)}>
-                        Annuler
-                      </button>
-                      <button type="submit" className="btn btn-primary">
-                        <FaPlus className="me-2" /> Ajouter
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Toast Notification */}
+        <Toast
+          show={showToast}
+          onClose={() => setShowToast(false)}
+          delay={3000}
+          autohide
+          className="position-fixed top-0 end-0 m-3"
+          bg={toastVariant}
+        >
+          <Toast.Body className="text-white">
+            {toastMessage}
+          </Toast.Body>
+        </Toast>
       </div>
     </div>
   );

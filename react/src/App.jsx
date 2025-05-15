@@ -93,13 +93,9 @@ function App() {
                 <Route path="sidebar" element={<SideBar />} />
                 <Route path="responsable" element={< ResponsablePage/>} />
                 <Route path="participants" element={< ParticipantsPage/>} />
-                {/* <Route path="formateur-formations/:formationId" element={<FormateursFormationPage />} /> */}
-                
+                <Route path="formateurs-formation/:formationId" element={<FormateursFormationPage />} />
                 <Route path="formateur_animateur" element={<FormateurAnimateurPage/>} />
-
-
             </Route>
-            <Route path="/formateurs-formation/:formationId" element={<FormateursFormationPage />} />
 
         </Routes>
       </AuthProvider>
