@@ -1,8 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import SideBar from './SideBar';
-import { FaUserTie, FaSearch, FaSync, FaExclamationTriangle } from 'react-icons/fa';
-import { BsFillCalendarDateFill, BsPersonBadgeFill } from 'react-icons/bs';
-import { MdWorkOutline, MdEmail } from 'react-icons/md';
+import { 
+  FaUserTie, 
+  FaSearch, 
+  FaSync, 
+  FaExclamationTriangle,
+  FaFilter,
+  FaEdit,
+  FaTrash
+} from 'react-icons/fa';
+import { 
+  BsFillCalendarDateFill, 
+  BsPersonBadgeFill,
+  BsBook,
+  BsEnvelope,
+  BsPerson
+} from 'react-icons/bs';
+import { 
+  Card, 
+  Row, 
+  Col, 
+  Button, 
+  Form, 
+  InputGroup,
+  Badge,
+  Container,
+  Table
+} from 'react-bootstrap';
 
 const ParticipantsPage = () => {
   const [formateurs, setFormateurs] = useState([]);
@@ -10,16 +34,15 @@ const ParticipantsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [filterFormation, setFilterFormation] = useState('all');
 
   useEffect(() => {
-    // Fetch data when component mounts
     fetchData();
   }, []);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      // Fetch formateurs
       const formateurResponse = await fetch('http://127.0.0.1:8000/api/responsable-cdc/formateurs');
       const formationResponse = await fetch('http://127.0.0.1:8000/api/responsable-cdc/gere-formation');
       
@@ -43,7 +66,6 @@ const ParticipantsPage = () => {
     }
   };
 
-  // Format date to display in a readable format
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
@@ -54,72 +76,100 @@ const ParticipantsPage = () => {
     });
   };
 
-  // Get formation title by formation_id
   const getFormationTitle = (formation_id) => {
     const formation = formations.find(f => f.id === formation_id);
     return formation ? formation.titre : 'Non assigné';
   };
 
-  // Filter formateurs based on search term
   const filteredFormateurs = formateurs.filter(formateur => {
     const userName = formateur.user?.name?.toLowerCase() || '';
     const userEmail = formateur.user?.email?.toLowerCase() || '';
     const matricule = formateur.matricule?.toLowerCase() || '';
-    
-    return (
-      userName.includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = userName.includes(searchTerm.toLowerCase()) ||
       userEmail.includes(searchTerm.toLowerCase()) ||
-      matricule.includes(searchTerm.toLowerCase())
-    );
+                         matricule.includes(searchTerm.toLowerCase());
+    
+    const matchesFormation = filterFormation === 'all' || 
+                            formateur.formation_id === parseInt(filterFormation);
+    
+    return matchesSearch && matchesFormation;
   });
 
   return (
     <div className="d-flex">
     <SideBar />
-    <div className="participants-container flex-grow-1">
-      <div className="container-fluid">
+      <div className="page-content">
+        <Container fluid className="px-4">
         {/* Header */}
-        <div className="row mb-4 align-items-center">
-          <div className="col">
-            <h1 className="h3 mb-0 text-gray-800">
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">
               <FaUserTie className="me-2" />
-              Tableau de bord des formateurs
+                Gestion des Formateurs
             </h1>
-            <p className="text-muted">Gestion et suivi des formateurs</p>
+              <p className="text-muted">Vue d'ensemble des formateurs et leurs formations assignées</p>
           </div>
-        </div>
-
-        {/* Search and filters row */}
-        <div className="row mb-4">
-          <div className="col-md-6">
-            <div className="input-group">
-              <span className="input-group-text bg-primary text-white">
-                <FaSearch />
-              </span>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Rechercher par nom, email ou matricule..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+            <div className="d-flex gap-2">
+              <Button 
+                variant="outline-secondary" 
+                onClick={fetchData}
+                className="refresh-btn"
+              >
+                <FaSync className="me-2" />
+                Actualiser
+              </Button>
             </div>
           </div>
-          <div className="col-md-6 text-md-end mt-3 mt-md-0">
-            <button className="btn btn-outline-secondary" onClick={fetchData}>
-              <FaSync className="me-1" /> Rafraîchir
-            </button>
-          </div>
+
+          {/* Search and Filters */}
+          <Card className="search-card mb-4">
+            <Card.Body>
+              <Row className="align-items-center">
+                <Col lg={6} md={6} className="mb-3 mb-md-0">
+                  <InputGroup>
+                    <InputGroup.Text className="bg-transparent">
+                      <FaSearch className="text-muted" />
+                    </InputGroup.Text>
+                    <Form.Control
+                      placeholder="Rechercher un formateur..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="border-start-0"
+                    />
+                  </InputGroup>
+                </Col>
+                <Col lg={6} md={6} className="mb-3 mb-md-0">
+                  <InputGroup>
+                    <InputGroup.Text className="bg-transparent">
+                      <FaFilter className="text-muted" />
+                    </InputGroup.Text>
+                    <Form.Select
+                      value={filterFormation}
+                      onChange={(e) => setFilterFormation(e.target.value)}
+                      className="border-start-0"
+                    >
+                      <option value="all">Toutes les formations</option>
+                      {formations.map((formation) => (
+                        <option key={formation.id} value={formation.id}>
+                          {formation.titre}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </InputGroup>
+                </Col>
+              </Row>
+            </Card.Body>
+          </Card>
+
+          {/* Results Summary */}
+          <div className="results-summary mb-4">
+            <p className="mb-0">
+              {filteredFormateurs.length} formateur(s) trouvé(s)
+              {searchTerm && ` pour "${searchTerm}"`}
+            </p>
         </div>
 
-        {/* Content */}
-        <div className="row">
-          <div className="col-12">
-            <div className="card shadow">
-              <div className="card-header bg-white py-3">
-                <h6 className="m-0 fw-bold text-primary">Liste des formateurs</h6>
-              </div>
-              <div className="card-body">
+          {/* Table Content */}
                 {loading ? (
                   <div className="text-center py-5">
                     <div className="spinner-border text-primary" role="status">
@@ -133,82 +183,164 @@ const ParticipantsPage = () => {
                     <div>Erreur: {error}</div>
                   </div>
                 ) : (
+            <Card className="table-card">
+              <Card.Body>
                   <div className="table-responsive">
-                    <table className="table table-hover table-striped">
-                      <thead className="table-light">
+                  <Table hover className="align-middle">
+                    <thead>
                         <tr>
-                          <th scope="col">#</th>
-                          <th scope="col">
-                            <FaUserTie className="me-1" /> Nom
-                          </th>
-                          <th scope="col">
-                            <MdEmail className="me-1" /> Email
-                          </th>
-                          <th scope="col">
-                            <BsPersonBadgeFill className="me-1" /> Matricule
-                          </th>
-                          <th scope="col">
-                            <MdWorkOutline className="me-1" /> Formation
-                          </th>
-                          <th scope="col">
-                            <BsFillCalendarDateFill className="me-1" /> Date de création
-                          </th>
+                        <th>Formateur</th>
+                        <th>Matricule</th>
+                        <th>Email</th>
+                        <th>Formation</th>
+                        <th>Date d'inscription</th>
+                        <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredFormateurs.length > 0 ? (
-                          filteredFormateurs.map((formateur, index) => (
-                            <tr key={formateur.id || index}>
-                              <th scope="row">{index + 1}</th>
-                              <td>{formateur.user?.name || 'Non défini'}</td>
-                              <td>{formateur.user?.email || 'Non défini'}</td>
-                              <td>{formateur.matricule || 'Non défini'}</td>
-                              <td>
-                                <span className="badge bg-info text-dark">
-                                  {getFormationTitle(formateur.formation_id)}
-                                </span>
-                              </td>
-                              <td>{formatDate(formateur.created_at)}</td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan="6" className="text-center py-4">
-                              {searchTerm ? (
-                                <div>
-                                  <FaSearch className="me-2 text-muted" />
-                                  Aucun résultat trouvé pour "{searchTerm}"
+                      {filteredFormateurs.map((formateur) => (
+                        <tr key={formateur.id}>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <div className="avatar-sm me-3">
+                                <div className="avatar">
+                                  <BsPerson size={20} />
                                 </div>
-                              ) : (
-                                <div>Aucun formateur disponible</div>
-                              )}
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
                   </div>
-                )}
-              </div>
-              <div className="card-footer bg-white border-top-0">
-                <small className="text-muted">
-                  Affichage de {filteredFormateurs.length} formateur(s) sur un total de {formateurs.length}
-                </small>
+                              <div>
+                                <h6 className="mb-0">{formateur.user?.name || 'Non défini'}</h6>
               </div>
             </div>
+                          </td>
+                          <td>
+                            <Badge bg="info" className="matricule-badge">
+                              <BsPersonBadgeFill className="me-1" />
+                              {formateur.matricule || 'Non défini'}
+                            </Badge>
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <BsEnvelope className="me-2 text-muted" />
+                              {formateur.user?.email || 'Non défini'}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <BsBook className="me-2 text-muted" />
+                              {getFormationTitle(formateur.formation_id)}
           </div>
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <BsFillCalendarDateFill className="me-2 text-muted" />
+                              {formatDate(formateur.created_at)}
         </div>
+                          </td>
+                          <td>
+                            <div className="d-flex gap-2">
+                              <Button variant="outline-primary" size="sm">
+                                <FaEdit />
+                              </Button>
+                              <Button variant="outline-danger" size="sm">
+                                <FaTrash />
+                              </Button>
       </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
       </div>
+              </Card.Body>
+            </Card>
+          )}
+        </Container>
 
       <style jsx>{`
-        .participants-container {
-          padding: 1.5rem;
+          .page-content {
+            padding: 2rem 0;
           background: #f8f9fa;
-          min-height: 100%;
+            min-height: 100vh;
           width: 100%;
         }
+
+          .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+          }
+
+          .page-title {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+          }
+
+          .search-card, .table-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+          }
+
+          .refresh-btn {
+            display: flex;
+            align-items: center;
+            border-radius: 10px;
+            padding: 0.5rem 1rem;
+          }
+
+          .avatar-sm {
+            width: 40px;
+            height: 40px;
+            flex-shrink: 0;
+          }
+
+          .avatar {
+            width: 100%;
+            height: 100%;
+            background: #e9ecef;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+          }
+
+          .matricule-badge {
+            font-weight: 500;
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+          }
+
+          .results-summary {
+            color: #6c757d;
+          }
+
+          @media (max-width: 992px) {
+            .page-header {
+              flex-direction: column;
+              text-align: center;
+              gap: 1rem;
+            }
+
+            .page-title {
+              justify-content: center;
+            }
+          }
+
+          @media (max-width: 768px) {
+            .page-content {
+              padding: 1rem 0;
+            }
+        }
       `}</style>
+      </div>
     </div>
   );
 };

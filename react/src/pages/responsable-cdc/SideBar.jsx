@@ -57,6 +57,7 @@ const SideBar = ({ children }) => {
   ];
 
   return (
+    <>
     <div className="app-container">
       <div className="page-container">
         <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
@@ -103,11 +104,14 @@ const SideBar = ({ children }) => {
         <main className="main-content">
           {children}
         </main>
+        </div>
+      </div>
 
         <style jsx>{`
           .app-container {
             min-height: 100vh;
             display: flex;
+          flex-direction: column;
           }
 
           .page-container {
@@ -131,6 +135,8 @@ const SideBar = ({ children }) => {
             color: #333;
             transition: all 0.3s ease;
             position: fixed;
+          top: 0;
+          left: 0;
             display: flex;
             flex-direction: column;
             box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
@@ -288,8 +294,7 @@ const SideBar = ({ children }) => {
             }
           }
         `}</style>
-      </div>
-    </div>
+    </>
   );
 };
 

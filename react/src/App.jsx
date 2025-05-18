@@ -30,7 +30,11 @@ import FormateursFormationPage from './pages/responsable-cdc/FormateursFormation
 import ParticipantsPage from './pages/responsable-cdc/ParticipantsPage';
 import FormateurAnimateurPage from './pages/responsable-cdc/FormateurAnimateurPage';
 
-
+// Responsable DR pages
+import DashboardPage from './pages/responsable-dr/DashboardPage';
+import AbsencesPage from './pages/responsable-dr/AbsencesPage';
+import DrFormationPage from './pages/responsable-dr/FormationPage';
+import RapportDr from './pages/responsable-dr/RapportDr';
 
 // RequireAuth component
 function RequireAuth({ children }) {
@@ -95,6 +99,14 @@ function App() {
                 <Route path="participants" element={< ParticipantsPage/>} />
                 <Route path="formateurs-formation/:formationId" element={<FormateursFormationPage />} />
                 <Route path="formateur_animateur" element={<FormateurAnimateurPage/>} />
+            </Route>
+
+          {/* Responsable DR routes */}
+          <Route path="/responsable-dr">
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="absences" element={<AbsencesPage />} />
+            <Route path="formation" element={<DrFormationPage />} />
+            <Route path="rapports" element={<RapportDr />} />
             </Route>
 
         </Routes>

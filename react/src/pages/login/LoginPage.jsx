@@ -47,21 +47,24 @@ export default function LoginPage() {
       
       console.log(`User authenticated with role: ${role}`);
       
-      // Redirect responsable_formation to their dashboard
-      if (role === 'responsable_formation') {
-        navigate('/profile/dashboard'); // Redirect to protected profile dashboard
-      } 
-      // For other roles, use the standard dashboard path
-      else if (role === 'admin') {
-        navigate('/admin/dashboard');
-      }
-      else if (role === 'responsable_cdc') {
-        navigate('/responsable-cdc/dashboard');
-      }
-      else {
-        // Convert role_name format (with underscore) to URL format (with hyphen)
-        const routeRole = role.replace('_', '-');
-        navigate(`/${routeRole}/dashboard`);
+      // Redirect based on role
+      switch (role) {
+        case 'responsable_dr':
+          navigate('/responsable-dr/dashboard');
+          break;
+        case 'responsable_formation':
+          navigate('/profile/dashboard');
+          break;
+        case 'admin':
+          navigate('/admin/dashboard');
+          break;
+        case 'responsable_cdc':
+          navigate('/responsable-cdc/dashboard');
+          break;
+        default:
+          // Convert role_name format (with underscore) to URL format (with hyphen)
+          const routeRole = role.replace('_', '-');
+          navigate(`/${routeRole}/dashboard`);
       }
     }
   }, [isAuthenticated, user, navigate]);

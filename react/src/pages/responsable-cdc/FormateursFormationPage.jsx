@@ -4,7 +4,7 @@ import SideBar from './SideBar';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { Table, Button, Toast, Card } from 'react-bootstrap';
-import { BsTrash, BsPersonPlusFill, BsSearch, BsCheckCircleFill } from 'react-icons/bs';
+import { BsTrash, BsPersonPlusFill, BsSearch, BsCheckCircleFill, BsPeople, BsCalendar3 } from 'react-icons/bs';
 
 
 const FormateursFormationPage = () => {
@@ -146,37 +146,71 @@ const FormateursFormationPage = () => {
   );
 
   if (loading) return (
-    <div className="d-flex justify-content-center align-items-center vh-100">
-            <div className="spinner-border text-primary" role="status">
+    <div className="d-flex">
+      <SideBar />
+      <div className="page-content">
+        <div className="loading-container">
+          <div className="text-center loading-content">
+            <div className="spinner-border text-primary" style={{ width: '2.5rem', height: '2.5rem' }} role="status">
               <span className="visually-hidden">Chargement...</span>
+            </div>
+            <h6 className="mt-3 text-primary fw-normal">Chargement en cours...</h6>
+          </div>
+        </div>
         </div>
       </div>
     );
 
   if (error) return (
-    <div className="alert alert-danger m-3">{error}</div>
+    <div className="d-flex">
+      <SideBar />
+      <div className="page-content">
+        <div className="alert alert-danger m-4 shadow-sm">{error}</div>
+      </div>
+    </div>
   );
 
   return (
     <div className="d-flex">
       <SideBar />
-      <div className="flex-grow-1 bg-light min-vh-100">
+      <div className="page-content">
         <div className="container-fluid p-4">
           {/* Header Section */}
-        <div className="d-flex justify-content-between align-items-center mb-4">
-            <h4 className="mb-0">Gestion des Formateurs</h4>
+          <div className="header-section mb-4">
+            <h2 className="page-title">Gestion des Formateurs</h2>
+            <p className="text-muted">Gérez les formateurs pour votre formation</p>
+            
+            <div className="d-flex align-items-center mt-3 stats-row">
+              <div className="stat-card me-4">
+                <div className="stat-icon">
+                  <BsPeople className="text-primary" size={24} />
+                </div>
+                <div className="stat-info">
+                  <h3 className="stat-number">{existingFormateurs.size}</h3>
+                  <p className="stat-label">Formateurs Assignés</p>
+                </div>
+              </div>
+              
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <BsCalendar3 className="text-success" size={24} />
+                </div>
+                <div className="stat-info">
+                  <h3 className="stat-number">{users.length}</h3>
+                  <p className="stat-label">Formateurs Disponibles</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Search Bar */}
-          <Card className="mb-4 border-0 shadow-sm">
+          <Card className="search-card mb-4">
             <Card.Body>
-              <div className="input-group">
-                <span className="input-group-text border-0 bg-white">
-                  <BsSearch className="text-muted" />
-                </span>
+              <div className="search-wrapper">
+                <BsSearch className="search-icon" />
                 <input
                   type="text"
-                  className="form-control border-0 shadow-none"
+                  className="search-input"
                   placeholder="Rechercher un formateur..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -186,37 +220,37 @@ const FormateursFormationPage = () => {
           </Card>
 
           {/* Users Table */}
-          <Card className="border-0 shadow-sm">
+          <Card className="table-card">
             <Card.Body className="p-0">
               <div className="table-responsive">
-                <Table hover className="table align-middle mb-0">
-                  <thead className="bg-light">
+                <Table hover className="custom-table">
+                  <thead>
                     <tr>
-                      <th className="border-0 ps-4">Formateur</th>
-                      <th className="border-0">Email</th>
-                      <th className="border-0 text-end pe-4">Actions</th>
+                      <th>Formateur</th>
+                      <th>Email</th>
+                      <th className="text-end">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredUsers.map((user) => (
                       <tr key={user.id}>
-                        <td className="ps-4">
-                          <div className="d-flex align-items-center">
-                            <div className="bg-primary bg-opacity-10 rounded-circle p-2 me-3">
-                              <BsPersonPlusFill className="text-primary" />
+                        <td>
+                          <div className="user-info">
+                            <div className="user-avatar">
+                              {user.name.charAt(0).toUpperCase()}
                             </div>
-                            <div>{user.name}</div>
+                            <div className="user-name">{user.name}</div>
                           </div>
                         </td>
-                        <td className="text-muted">{user.email}</td>
-                        <td className="text-end pe-4">
-                          <div className="d-flex gap-2 justify-content-end">
+                        <td className="user-email">{user.email}</td>
+                        <td>
+                          <div className="action-buttons">
                             <Button
                               variant={existingFormateurs.has(user.id) ? "outline-success" : "primary"}
                               size="sm"
                               onClick={() => handleAddFormateur(user.id)}
                               disabled={existingFormateurs.has(user.id)}
-                              className="d-flex align-items-center px-3"
+                              className="action-btn"
                             >
                               {existingFormateurs.has(user.id) ? (
                                 <>
@@ -235,7 +269,7 @@ const FormateursFormationPage = () => {
                                 variant="outline-danger"
                                 size="sm"
                                 onClick={() => handleRemoveFormateur(user.id)}
-                                className="px-3"
+                                className="action-btn ms-2"
                               >
                                 <BsTrash />
                               </Button>
@@ -247,8 +281,9 @@ const FormateursFormationPage = () => {
                   </tbody>
                 </Table>
                 {filteredUsers.length === 0 && (
-                  <div className="text-center py-5 text-muted">
-                    Aucun utilisateur trouvé
+                  <div className="empty-state">
+                    <BsSearch size={32} className="empty-icon" />
+                    <p>Aucun formateur trouvé</p>
               </div>
             )}
           </div>
@@ -262,7 +297,7 @@ const FormateursFormationPage = () => {
           onClose={() => setShowToast(false)}
           delay={3000}
           autohide
-          className="position-fixed top-0 end-0 m-3"
+          className="custom-toast"
           bg={toastVariant}
         >
           <Toast.Body className="text-white">
@@ -270,6 +305,213 @@ const FormateursFormationPage = () => {
           </Toast.Body>
         </Toast>
       </div>
+
+      <style jsx>{`
+        .page-content {
+          background: #f8f9fa;
+          min-height: 100vh;
+          width: 100%;
+        }
+
+        .header-section {
+          margin-bottom: 2rem;
+        }
+
+        .page-title {
+          font-size: 1.75rem;
+          font-weight: 600;
+          color: #2c3e50;
+          margin-bottom: 0.5rem;
+        }
+
+        .stats-row {
+          gap: 1.5rem;
+        }
+
+        .stat-card {
+          display: flex;
+          align-items: center;
+          background: white;
+          padding: 1.25rem;
+          border-radius: 12px;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+          min-width: 200px;
+        }
+
+        .stat-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-right: 1rem;
+          background: rgba(13, 110, 253, 0.1);
+        }
+
+        .stat-number {
+          font-size: 1.5rem;
+          font-weight: 600;
+          margin-bottom: 0.25rem;
+          color: #2c3e50;
+        }
+
+        .stat-label {
+          color: #6c757d;
+          margin-bottom: 0;
+          font-size: 0.875rem;
+        }
+
+        .search-card {
+          border: none;
+          border-radius: 12px;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+        }
+
+        .search-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .search-icon {
+          position: absolute;
+          left: 1rem;
+          color: #6c757d;
+        }
+
+        .search-input {
+          width: 100%;
+          padding: 0.75rem 1rem 0.75rem 2.5rem;
+          border: 1px solid #e9ecef;
+          border-radius: 8px;
+          font-size: 0.95rem;
+        }
+
+        .search-input:focus {
+          outline: none;
+          border-color: #0d6efd;
+          box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+        }
+
+        .table-card {
+          border: none;
+          border-radius: 12px;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+          overflow: hidden;
+        }
+
+        .custom-table {
+          margin-bottom: 0;
+        }
+
+        .custom-table th {
+          background: #f8f9fa;
+          font-weight: 600;
+          color: #2c3e50;
+          padding: 1rem;
+          border-bottom: 2px solid #e9ecef;
+        }
+
+        .custom-table td {
+          padding: 1rem;
+          vertical-align: middle;
+          border-bottom: 1px solid #e9ecef;
+        }
+
+        .user-info {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .user-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: #0d6efd;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 600;
+        }
+
+        .user-name {
+          font-weight: 500;
+          color: #2c3e50;
+        }
+
+        .user-email {
+          color: #6c757d;
+        }
+
+        .action-buttons {
+          display: flex;
+          justify-content: flex-end;
+          gap: 0.5rem;
+        }
+
+        .action-btn {
+          display: flex;
+          align-items: center;
+          padding: 0.5rem 1rem;
+          border-radius: 6px;
+          transition: all 0.2s;
+        }
+
+        .empty-state {
+          text-align: center;
+          padding: 3rem 1rem;
+          color: #6c757d;
+        }
+
+        .empty-icon {
+          margin-bottom: 1rem;
+          opacity: 0.5;
+        }
+
+        .custom-toast {
+          position: fixed;
+          top: 1rem;
+          right: 1rem;
+          min-width: 250px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          border-radius: 8px;
+        }
+
+        .loading-container {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 100vh;
+          background-color: #f8f9fa;
+        }
+
+        .loading-content {
+          text-align: center;
+        }
+
+        @media (max-width: 768px) {
+          .stats-row {
+            flex-direction: column;
+          }
+
+          .stat-card {
+            width: 100%;
+            margin-bottom: 1rem;
+          }
+
+          .action-buttons {
+            flex-direction: column;
+          }
+
+          .action-btn {
+            width: 100%;
+            margin-bottom: 0.5rem;
+          }
+        }
+      `}</style>
     </div>
   );
 };

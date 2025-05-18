@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { BsTrash, BsPlus, BsPencil, BsEye, BsCalendar, BsGeoAlt, BsPeople, BsBuilding, BsBook, BsCheckCircle, BsXCircle, BsClock } from 'react-icons/bs';
-import { Modal, Button, Form, Badge, Card, Row, Col } from 'react-bootstrap';
+import { BsTrash, BsPlus, BsPencil, BsEye, BsCalendar, BsGeoAlt, BsPeople, BsBuilding, BsBook, BsCheckCircle, BsXCircle, BsClock, BsSearch, BsFilter, BsGrid, BsList } from 'react-icons/bs';
+import { Modal, Button, Form, Badge, Card, Row, Col, InputGroup } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import SideBar from './SideBar';
 
@@ -45,6 +45,10 @@ const FormationPage = () => {
   });
   const [validationErrors, setValidationErrors] = useState({});
   const navigate = useNavigate();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterType, setFilterType] = useState('all');
 
   useEffect(() => {
     fetchFormations();
@@ -315,47 +319,121 @@ const FormationPage = () => {
     navigate(`/responsable-cdc/formateurs-formation/${formationId}`);
   };
 
+  // Filter formations based on search and filters
+  const filteredFormations = formations.filter(formation => {
+    const matchesSearch = formation.titre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         formation.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         formation.lieu?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = filterStatus === 'all' || formation.statut === filterStatus;
+    const matchesType = filterType === 'all' || formation.type_formation === filterType;
+    
+    return matchesSearch && matchesStatus && matchesType;
+  });
+
   return (
     <div className="d-flex">
     <SideBar />
-    <div className="page-content flex-grow-1">
-      <div className="container-fluid">
-        {/* Header with Stats */}
-        <div className="row mb-4">
-          <div className="col-12">
-            <Card className="border-0 shadow-sm bg-primary text-white">
-              <Card.Body>
-                <div className="d-flex justify-content-between align-items-center">
-                  <h2 className="mb-0">Gestion des Formations</h2>
+      <div className="page-content">
+        <div className="formations-container">
+          {/* Header Section */}
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">Gestion des Formations</h1>
+              <p className="page-subtitle">Gérez et suivez toutes vos formations</p>
+            </div>
                   <Button 
-                    variant="light" 
-                    className="d-flex align-items-center gap-2"
+              variant="primary" 
+              className="add-btn"
                     onClick={() => {
                       resetForm();
                       setShowModal(true);
                     }}
                   >
-                    <BsPlus size={20} />
+              <BsPlus size={24} className="me-2" />
                     Nouvelle Formation
                   </Button>
                 </div>
-              </Card.Body>
-            </Card>
+
+          {/* Search and Filters Section */}
+          <div className="search-section">
+            <div className="search-bar">
+              <InputGroup>
+                <InputGroup.Text className="search-icon">
+                  <BsSearch />
+                </InputGroup.Text>
+                <Form.Control
+                  placeholder="Rechercher une formation..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="search-input"
+                />
+              </InputGroup>
+            </div>
+            
+            <div className="filters">
+              <Form.Select 
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="filter-select"
+              >
+                <option value="all">Tous les statuts</option>
+                <option value="pending">En attente</option>
+                <option value="validated">Validé</option>
+                <option value="rejected">Rejeté</option>
+              </Form.Select>
+
+              <Form.Select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="filter-select"
+              >
+                <option value="all">Tous les types</option>
+                <option value="présentiel">Présentiel</option>
+                <option value="à distance">À distance</option>
+                <option value="hybride">Hybride</option>
+              </Form.Select>
+
+              <div className="view-toggle">
+                <Button 
+                  variant={viewMode === 'grid' ? 'primary' : 'light'}
+                  className="view-btn"
+                  onClick={() => setViewMode('grid')}
+                >
+                  <BsGrid />
+                </Button>
+                <Button 
+                  variant={viewMode === 'list' ? 'primary' : 'light'}
+                  className="view-btn"
+                  onClick={() => setViewMode('list')}
+                >
+                  <BsList />
+                </Button>
+              </div>
           </div>
         </div>
 
-        {/* Formations Grid */}
-        <Row xs={1} md={2} lg={3} className="g-4">
-          {formations.map((formation) => (
-            <Col key={formation.id}>
-              <Card className="h-100 border-0 shadow-sm hover-shadow">
+          {/* Results Summary */}
+          <div className="results-summary">
+            <p className="mb-0">
+              {filteredFormations.length} formation(s) trouvée(s)
+              {searchTerm && ` pour "${searchTerm}"`}
+            </p>
+          </div>
+
+          {/* Formations Display */}
+          {viewMode === 'grid' ? (
+            <Row className="formations-grid">
+              {filteredFormations.map((formation) => (
+                <Col key={formation.id} lg={4} md={6} className="mb-4">
+                  <Card className="formation-card">
                 <Card.Body>
-                  <div className="d-flex justify-content-between mb-3">
-                    <h5 className="card-title text-primary mb-0">{formation.titre}</h5>
+                      <div className="formation-header">
+                        <h3 className="formation-title">{formation.titre}</h3>
                     {getStatusBadge(formation.statut)}
                   </div>
                   
-                  <p className="text-muted small mb-3">
+                      <p className="formation-description">
                     {formation.description 
                       ? formation.description.length > 100 
                         ? formation.description.substring(0, 100) + '...'
@@ -364,45 +442,62 @@ const FormationPage = () => {
                     }
                   </p>
 
-                  <div className="mb-3">
-                    <div className="d-flex align-items-center mb-2">
-                      <BsCalendar className="text-primary me-2" />
-                      <small>
-                        Du {new Date(formation.date_debut).toLocaleDateString()} 
-                        au {new Date(formation.date_fin).toLocaleDateString()}
-                      </small>
+                      <div className="formation-details">
+                        <div className="detail-item">
+                          <BsCalendar className="detail-icon" />
+                          <div className="detail-text">
+                            <small className="text-muted">Période</small>
+                            <p className="mb-0">
+                              {new Date(formation.date_debut).toLocaleDateString()} - 
+                              {new Date(formation.date_fin).toLocaleDateString()}
+                            </p>
+                          </div>
                     </div>
                     
-                    <div className="d-flex align-items-center mb-2">
-                      <BsGeoAlt className="text-primary me-2" />
-                      <small>{formation.lieu || 'Non défini'}</small>
+                        <div className="detail-item">
+                          <BsGeoAlt className="detail-icon" />
+                          <div className="detail-text">
+                            <small className="text-muted">Lieu</small>
+                            <p className="mb-0">{formation.lieu || 'Non défini'}</p>
+                          </div>
                     </div>
 
-                    <div className="d-flex align-items-center mb-2">
-                      <BsPeople className="text-primary me-2" />
-                      <small>{formation.capacite_max} places</small>
+                        <div className="detail-item">
+                          <BsPeople className="detail-icon" />
+                          <div className="detail-text">
+                            <small className="text-muted">Capacité</small>
+                            <p className="mb-0">{formation.capacite_max} places</p>
+                          </div>
                     </div>
 
-                    <div className="d-flex align-items-center mb-2">
-                      <BsBuilding className="text-primary me-2" />
-                      <small>{formation.region?.nom || 'Non définie'}</small>
+                        <div className="detail-item">
+                          <BsBuilding className="detail-icon" />
+                          <div className="detail-text">
+                            <small className="text-muted">Région</small>
+                            <p className="mb-0">{formation.region?.nom || 'Non définie'}</p>
+                          </div>
                     </div>
 
-                    <div className="d-flex align-items-center mb-2">
-                      <BsBook className="text-primary me-2" />
-                      <small>{formation.filiere?.nom || 'Non définie'}</small>
+                        <div className="detail-item">
+                          <BsBook className="detail-icon" />
+                          <div className="detail-text">
+                            <small className="text-muted">Filière</small>
+                            <p className="mb-0">{formation.filiere?.nom || 'Non définie'}</p>
+                          </div>
                     </div>
                   </div>
 
-                  <div className="mb-3">
-                    <Badge bg="info" className="me-2">{formation.type_formation}</Badge>
+                      <div className="formation-tags">
+                        <Badge className="type-badge" bg="info">
+                          {formation.type_formation}
+                        </Badge>
                     {formateurAnimateurs
                       .filter(fa => fa.formation_id === formation.id)
                       .map((formateur) => (
                         <Badge 
                           key={formateur.id} 
+                              className="formateur-badge"
                           bg="secondary" 
-                          className="me-1"
                         >
                           {formateur.nom} {formateur.prenom}
                         </Badge>
@@ -410,33 +505,30 @@ const FormationPage = () => {
                     }
                   </div>
 
-                  <div className="d-flex gap-2">
+                      <div className="formation-actions">
                     <Button
-                      variant="outline-warning" 
-                      size="sm"
-                      className="flex-grow-1 d-flex align-items-center justify-content-center gap-2"
+                          variant="light"
+                          className="action-btn edit-btn"
                       onClick={() => handleEdit(formation)}
                     >
                       <BsPencil />
-                      Modifier
+                          <span>Modifier</span>
                     </Button>
                     <Button 
-                      variant="outline-danger" 
-                      size="sm"
-                      className="flex-grow-1 d-flex align-items-center justify-content-center gap-2"
+                          variant="light"
+                          className="action-btn delete-btn"
                       onClick={() => handleDelete(formation.id)}
                     >
                       <BsTrash />
-                      Supprimer
+                          <span>Supprimer</span>
                     </Button>
                     <Button 
-                      variant="outline-info" 
-                      size="sm"
-                      className="flex-grow-1 d-flex align-items-center justify-content-center gap-2"
+                          variant="light"
+                          className="action-btn view-btn"
                       onClick={() => handleViewFormateurs(formation.id)}
                     >
                       <BsEye />
-                      Formateurs
+                          <span>Formateurs</span>
                     </Button>
                   </div>
                 </Card.Body>
@@ -444,7 +536,56 @@ const FormationPage = () => {
             </Col>
           ))}
         </Row>
+          ) : (
+            <div className="formations-list">
+              {filteredFormations.map((formation) => (
+                <Card key={formation.id} className="formation-list-item">
+                  <Card.Body>
+                    <div className="list-item-content">
+                      <div className="list-item-main">
+                        <div className="list-item-header">
+                          <h3 className="formation-title">{formation.titre}</h3>
+                          {getStatusBadge(formation.statut)}
+                        </div>
+                        <p className="formation-description">
+                          {formation.description?.substring(0, 150) || 'Aucune description'}...
+                        </p>
+                      </div>
+                      
+                      <div className="list-item-details">
+                        <div className="detail-group">
+                          <BsCalendar className="detail-icon" />
+                          <span>{new Date(formation.date_debut).toLocaleDateString()}</span>
+                        </div>
+                        <div className="detail-group">
+                          <BsGeoAlt className="detail-icon" />
+                          <span>{formation.lieu}</span>
+                        </div>
+                        <div className="detail-group">
+                          <BsPeople className="detail-icon" />
+                          <span>{formation.capacite_max} places</span>
+                        </div>
+                      </div>
 
+                      <div className="list-item-actions">
+                        <Button variant="light" className="action-btn" onClick={() => handleEdit(formation)}>
+                          <BsPencil />
+                        </Button>
+                        <Button variant="light" className="action-btn" onClick={() => handleDelete(formation.id)}>
+                          <BsTrash />
+                        </Button>
+                        <Button variant="light" className="action-btn" onClick={() => handleViewFormateurs(formation.id)}>
+                          <BsEye />
+                        </Button>
+                      </div>
+                    </div>
+                  </Card.Body>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* Formation Modal */}
         <Modal 
           show={showModal} 
           onHide={() => {
@@ -452,9 +593,9 @@ const FormationPage = () => {
             resetForm();
           }} 
           size="lg" 
-          className="custom-modal"
+            className="formation-modal"
         >
-          <Modal.Header closeButton className="border-0 bg-primary text-white">
+            <Modal.Header closeButton>
             <Modal.Title>
               {isEditing ? 'Modifier la Formation' : 'Nouvelle Formation'}
             </Modal.Title>
@@ -552,15 +693,21 @@ const FormationPage = () => {
                           <BsGeoAlt className="me-2" />
                           Lieu
                         </Form.Label>
-                        <Form.Control
-                          type="text"
+                        <Form.Select
                           name="lieu"
                           value={formData.lieu}
                           onChange={handleInputChange}
                           isInvalid={!!validationErrors.lieu}
-                          placeholder="Lieu de la formation"
                           className="border-0 shadow-sm"
-                        />
+                        >
+                          <option value="">Sélectionner un lieu</option>
+                          <option value="Casablanca – (ISTA NTIC Casablanca)">Casablanca – (ISTA NTIC Casablanca)</option>
+                          <option value="Marrakech – (ISTA NTIC Sidi Youssef Ben Ali)">Marrakech – (ISTA NTIC Sidi Youssef Ben Ali)</option>
+                          <option value="Fès – (ISTA 2 Fès)">Fès – (ISTA 2 Fès)</option>
+                          <option value="Tanger – (ISGI Tanger - Institut Spécialisé en Gestion et Informatique)">Tanger – (ISGI Tanger - Institut Spécialisé en Gestion et Informatique)</option>
+                          <option value="Agadir – (ISTA Agadir Ait Melloul)">Agadir – (ISTA Agadir Ait Melloul)</option>
+                          <option value="Oujda – (ISTA Oujda Al Qods)">Oujda – (ISTA Oujda Al Qods)</option>
+                        </Form.Select>
                         <Form.Control.Feedback type="invalid">
                           {validationErrors.lieu}
                         </Form.Control.Feedback>
@@ -731,33 +878,407 @@ const FormationPage = () => {
         </Modal>
                         </div>
 
-
         <style jsx>{`
           .page-content {
-            padding: 1.5rem;
+            padding: 2rem;
             background: #f8f9fa;
             min-height: 100vh;
             width: 100%;
           }
 
-          .custom-modal .modal-content {
+          .formations-container {
+            max-width: 1400px;
+            margin: 0 auto;
+          }
+
+          .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+          }
+
+          .page-title {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+          }
+
+          .page-subtitle {
+            color: #6c757d;
+            margin-bottom: 0;
+          }
+
+          .add-btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+          }
+
+          .add-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          }
+
+          .formations-grid {
+            margin: 0 -0.5rem;
+          }
+
+          .formation-card {
+            height: 100%;
             border: none;
-            border-radius: 12px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease;
+          }
+
+          .formation-card:hover {
+            transform: translateY(-5px);
+          }
+
+          .formation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+          }
+
+          .formation-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0;
+          }
+
+          .formation-description {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
+          }
+
+          .formation-details {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+          }
+
+          .detail-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+          }
+
+          .detail-icon {
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f8f9fa;
+            border-radius: 10px;
+            color: #0d6efd;
+            font-size: 1.1rem;
+          }
+
+          .detail-text {
+            flex: 1;
+          }
+
+          .detail-text small {
+            display: block;
+            margin-bottom: 0.25rem;
+          }
+
+          .formation-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+          }
+
+          .type-badge {
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            font-weight: 500;
+          }
+
+          .formateur-badge {
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            font-weight: 500;
+            background: #e9ecef;
+            color: #495057;
+          }
+
+          .formation-actions {
+            display: flex;
+            gap: 0.5rem;
+          }
+
+          .action-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            border-radius: 10px;
+            transition: all 0.2s;
+            color: #495057;
+          }
+
+          .action-btn:hover {
+            background: #e9ecef;
+          }
+
+          .edit-btn:hover {
+            color: #0d6efd;
+          }
+
+          .delete-btn:hover {
+            color: #dc3545;
+          }
+
+          .view-btn:hover {
+            color: #198754;
+          }
+
+          .formation-modal .modal-content {
+            border: none;
+            border-radius: 15px;
             overflow: hidden;
           }
 
-          .shadow-sm {
-            box-shadow: 0 .125rem .25rem rgba(0,0,0,.075)!important;
+          .formation-modal .modal-header {
+            background: #0d6efd;
+            color: white;
+            border: none;
+            padding: 1.5rem;
           }
 
-          .hover-shadow:hover {
-            transform: translateY(-2px);
-            transition: all 0.3s ease;
-            box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+          .formation-modal .modal-title {
+            font-weight: 600;
+          }
+
+          .formation-modal .close {
+            color: white;
+          }
+
+          @media (max-width: 1200px) {
+            .formations-container {
+              max-width: 100%;
+            }
+          }
+
+          @media (max-width: 992px) {
+            .page-content {
+              padding: 1.5rem;
+            }
+
+            .page-header {
+              flex-direction: column;
+              text-align: center;
+              gap: 1rem;
+            }
+
+            .formations-grid {
+              margin: 0;
+            }
           }
 
           @media (max-width: 768px) {
             .page-content {
+              padding: 1rem;
+            }
+
+            .page-title {
+              font-size: 1.75rem;
+            }
+
+            .formation-card {
+              margin-bottom: 1rem;
+            }
+
+            .formation-actions {
+              flex-direction: column;
+            }
+
+            .action-btn {
+              width: 100%;
+            }
+          }
+
+          @media (max-width: 576px) {
+            .page-title {
+              font-size: 1.5rem;
+            }
+
+            .formation-title {
+              font-size: 1.1rem;
+            }
+
+            .detail-item {
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 0.5rem;
+            }
+
+            .detail-icon {
+              width: 30px;
+              height: 30px;
+              font-size: 1rem;
+            }
+          }
+
+          .search-section {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            margin-bottom: 2rem;
+          }
+
+          .search-bar {
+            margin-bottom: 1rem;
+          }
+
+          .search-icon {
+            background: transparent;
+            border-right: none;
+            color: #6c757d;
+          }
+
+          .search-input {
+            border-left: none;
+            padding-left: 0;
+          }
+
+          .search-input:focus {
+            box-shadow: none;
+          }
+
+          .filters {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+          }
+
+          .filter-select {
+            max-width: 200px;
+            flex: 1;
+          }
+
+          .view-toggle {
+            display: flex;
+            gap: 0.5rem;
+          }
+
+          .view-btn {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+          }
+
+          .results-summary {
+            margin-bottom: 1.5rem;
+            color: #6c757d;
+          }
+
+          .formations-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+          }
+
+          .formation-list-item {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+          }
+
+          .formation-list-item:hover {
+            transform: translateY(-2px);
+          }
+
+          .list-item-content {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+          }
+
+          .list-item-main {
+            flex: 1;
+          }
+
+          .list-item-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+          }
+
+          .list-item-details {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+          }
+
+          .detail-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #6c757d;
+          }
+
+          .list-item-actions {
+            display: flex;
+            gap: 0.5rem;
+          }
+
+          @media (max-width: 992px) {
+            .page-content {
+              padding: 1.5rem;
+            }
+
+            .filters {
+              flex-direction: column;
+              align-items: stretch;
+            }
+
+            .filter-select {
+              max-width: 100%;
+            }
+
+            .list-item-content {
+              flex-direction: column;
+              gap: 1rem;
+            }
+
+            .list-item-details {
+              flex-wrap: wrap;
+              gap: 1rem;
+            }
+          }
+
+          @media (max-width: 768px) {
+            .page-content {
+              padding: 1rem;
+            }
+
+            .search-section {
               padding: 1rem;
             }
           }

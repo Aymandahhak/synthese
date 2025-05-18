@@ -1,5 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import SideBar from './SideBar';
+import { 
+  FaUserTie, 
+  FaSync, 
+  FaExclamationTriangle,
+  FaEdit,
+  FaTrash
+} from 'react-icons/fa';
+import { 
+  BsFillCalendarDateFill, 
+  BsPersonBadgeFill,
+  BsGeoAlt,
+  BsBook
+} from 'react-icons/bs';
+import { 
+  Card, 
+  Row, 
+  Col, 
+  Button, 
+  Container,
+  Table,
+  Badge
+} from 'react-bootstrap';
 
 const FormateurAnimateurPage = () => {
   const [formateurs, setFormateurs] = useState([]);
@@ -8,6 +30,9 @@ const FormateurAnimateurPage = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    fetchData();
+  }, []);
+
     const fetchData = async () => {
       try {
         // Fetch formateurs animateurs data
@@ -32,9 +57,6 @@ const FormateurAnimateurPage = () => {
       }
     };
 
-    fetchData();
-  }, []);
-
   // Find formation by ID
   const getFormationById = (formationId) => {
     return formations.find(formation => formation.id === formationId);
@@ -42,80 +64,233 @@ const FormateurAnimateurPage = () => {
 
   // Format date to DD/MM/YYYY
   const formatDate = (dateString) => {
+    if (!dateString) return '-';
     const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR');
+    return date.toLocaleDateString('fr-FR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   };
 
-  if (loading) return (
-    <div className="formateur-container">
-      <div className="text-center">
+  if (loading) {
+    return (
+      <div className="d-flex">
+        <SideBar />
+        <div className="page-content">
+          <Container fluid className="px-4">
+            <div className="text-center py-5">
         <div className="spinner-border text-primary" role="status">
           <span className="visually-hidden">Chargement...</span>
         </div>
+              <p className="mt-3">Chargement des données...</p>
+            </div>
+          </Container>
       </div>
     </div>
   );
+  }
 
-  if (error) return (
-    <div className="formateur-container">
-      <div className="alert alert-danger" role="alert">
-        {error}
+  if (error) {
+    return (
+      <div className="d-flex">
+        <SideBar />
+        <div className="page-content">
+          <Container fluid className="px-4">
+            <div className="alert alert-danger d-flex align-items-center" role="alert">
+              <FaExclamationTriangle className="me-2" />
+              <div>{error}</div>
+            </div>
+          </Container>
       </div>
     </div>
   );
+  }
 
   return (
     <div className="d-flex">
-    <SideBar /> {/* Barre latérale à gauche */}
-    <div className="formateur-container flex-grow-1 p-4">
-      <h1 className="text-primary mb-4">Formateurs Animateurs </h1>
-      
-      <div className="row">
+      <SideBar />
+      <div className="page-content">
+        <Container fluid className="px-4">
+          {/* Header */}
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">
+                <FaUserTie className="me-2" />
+                Formateurs Animateurs
+              </h1>
+              <p className="text-muted">Vue d'ensemble des formateurs animateurs et leurs formations assignées</p>
+            </div>
+            <div className="d-flex gap-2">
+              <Button 
+                variant="outline-secondary" 
+                onClick={fetchData}
+                className="refresh-btn"
+              >
+                <FaSync className="me-2" />
+                Actualiser
+              </Button>
+            </div>
+          </div>
+
+          {/* Table Content */}
+          <Card className="table-card">
+            <Card.Body>
+              <div className="table-responsive">
+                <Table hover className="align-middle">
+                  <thead>
+                    <tr>
+                      <th>Formateur</th>
+                      <th>Formation</th>
+                      <th>Période</th>
+                      <th>Lieu</th>
+                      <th>Type</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
         {formateurs.map(formateur => {
           const formation = getFormationById(formateur.formation_id);
           
           return (
-            <div key={formateur.id} className="col-md-6 col-lg-4 mb-4">
-              <div className="card shadow-sm h-100">
-                <div className="card-header bg-primary text-white">
-                  <h5 className="mb-0">{formateur.nom} {formateur.prenom}</h5>
+                        <tr key={formateur.id}>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <div className="avatar-sm me-3">
+                                <div className="avatar">
+                                  <BsPersonBadgeFill size={20} />
+                                </div>
+                              </div>
+                              <div>
+                                <h6 className="mb-0">{formateur.nom} {formateur.prenom}</h6>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <BsBook className="me-2 text-muted" />
+                              {formation ? (
+                                <Badge bg="success">{formation.titre}</Badge>
+                              ) : (
+                                <Badge bg="warning">Non assigné</Badge>
+                              )}
                 </div>
-                <div className="card-body">
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <BsFillCalendarDateFill className="me-2 text-muted" />
                   {formation ? (
-                    <>
-                      <h6 className="card-subtitle mb-2 text-muted">Formation assignée</h6>
-                      <p className="card-text"><strong>Titre:</strong> {formation.titre}</p>
-                      <p className="card-text"><strong>Période:</strong> Du {formatDate(formation.date_debut)} au {formatDate(formation.date_fin)}</p>
-                      <p className="card-text"><strong>Lieu:</strong> {formation.lieu}</p>
-                      <p className="card-text"><strong>Type:</strong> {formation.type_formation}</p>
-                    </>
+                                `${formatDate(formation.date_debut)} - ${formatDate(formation.date_fin)}`
                   ) : (
-                    <p className="card-text text-warning">Aucune formation assignée</p>
+                                '-'
                   )}
                 </div>
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <BsGeoAlt className="me-2 text-muted" />
+                              {formation ? formation.lieu : '-'}
               </div>
+                          </td>
+                          <td>
+                            {formation && (
+                              <Badge bg="info">{formation.type_formation}</Badge>
+                            )}
+                          </td>
+                          <td>
+                            <div className="d-flex gap-2">
+                              <Button variant="outline-primary" size="sm">
+                                <FaEdit />
+                              </Button>
+                              <Button variant="outline-danger" size="sm">
+                                <FaTrash />
+                              </Button>
             </div>
+                          </td>
+                        </tr>
           );
         })}
-        
-        {formateurs.length === 0 && (
-          <div className="col-12">
-            <div className="alert alert-info" role="alert">
-              Aucun formateur animateur trouvé.
+                  </tbody>
+                </Table>
             </div>
-          </div>
-        )}
-      </div>
-        </div>
+            </Card.Body>
+          </Card>
+        </Container>
 
       <style jsx>{`
-        .formateur-container {
-          padding: 1.5rem;
+          .page-content {
+            padding: 2rem 0;
           background: #f8f9fa;
-          min-height: 100%;
+            min-height: 100vh;
+            width: 100%;
+            margin-top: 64px;
+          }
+
+          .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+          }
+
+          .page-title {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+          }
+
+          .table-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+          }
+
+          .refresh-btn {
+            display: flex;
+            align-items: center;
+            border-radius: 10px;
+            padding: 0.5rem 1rem;
+          }
+
+          .avatar-sm {
+            width: 40px;
+            height: 40px;
+            flex-shrink: 0;
+          }
+
+          .avatar {
           width: 100%;
+            height: 100%;
+            background: #e9ecef;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+          }
+
+          @media (max-width: 992px) {
+            .page-header {
+              flex-direction: column;
+              text-align: center;
+              gap: 1rem;
+            }
+
+            .page-title {
+              justify-content: center;
+            }
+          }
+
+          @media (max-width: 768px) {
+            .page-content {
+              padding: 1rem 0;
+            }
         }
       `}</style>
+      </div>
     </div>
   );
 };
