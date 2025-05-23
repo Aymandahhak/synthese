@@ -34,7 +34,7 @@ const themes = [
   { id: "ventes", name: "Ventes" },
 ];
 
-export default function CreateFormationForm({ onClose }) {
+export default function CreateFormationForm({ onClose, onSubmit }) {
   const { formations, setFormations, refreshFormations } = useFormations() || { formations: [], setFormations: () => {}, refreshFormations: () => {} };
   const { toast: useToastToast } = useToast();
   const { profile } = useProfile();
@@ -60,6 +60,7 @@ export default function CreateFormationForm({ onClose }) {
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
   const [success, setSuccess] = useState(false);
+  const [showDebug, setShowDebug] = useState(false); // Add state for debug mode
 
   // Vérifier l'état des formations au montage et après les mises à jour
   useEffect(() => {
@@ -258,6 +259,7 @@ export default function CreateFormationForm({ onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("Form submission started");
     
     if (Object.keys(validationErrors).length > 0) {
       setError("Veuillez corriger les erreurs de validation.");
@@ -285,19 +287,26 @@ export default function CreateFormationForm({ onClose }) {
     setSuccess(false);
       
     try {
+      console.log("Form data valid, preparing to submit:", formData);
+      
+      // Create FormData object for multipart/form-data request (needed for file upload)
       const submitData = new FormData();
+      
+      // Add all form fields to FormData
       Object.keys(formData).forEach(key => {
-        if (key === 'capacite_max' || key === 'region_id' || key === 'filiere_id' || key === 'responsable_id') {
-          if (formData[key]) submitData.append(key, String(formData[key]));
-        } else {
+        if (formData[key] !== undefined && formData[key] !== null) {
           submitData.append(key, formData[key]);
+          console.log(`Adding field ${key}:`, formData[key]);
         }
       });
       
+      // Add the image file if selected
       if (formationImage) {
         submitData.append('image', formationImage);
+        console.log("Adding image file:", formationImage.name);
       }
       
+      // Ensure responsable_id is set
       let respId = formData.responsable_id || profile?.id;
       if (!respId) {
         console.warn('Aucun ID de responsable. Utilisation ID 1 par défaut pour test.');
@@ -305,80 +314,31 @@ export default function CreateFormationForm({ onClose }) {
       }
       submitData.append('responsable_id', String(respId));
       
-      console.log('FormData envoyé pour création:', Object.fromEntries(submitData.entries()));
+      console.log('FormData prêt à être envoyé:', Object.fromEntries(submitData.entries()));
       
-      const response = await createFormation(submitData);
-      
-      console.log('Réponse API createFormation:', response);
-
-      if (response && response.id) {
-        toast.success("Formation créée avec succès!", {
-          description: `La formation "${response.titre || formData.titre}" a été ajoutée.`
-        });
-        setSuccess(true);
-
-        if (refreshFormations) {
-          console.log('Rafraîchissement de la liste des formations après création...');
-          await refreshFormations();
-        }
+      // Use the parent component's onSubmit handler to submit the form
+      if (typeof onSubmit === 'function') {
+        console.log("Calling parent onSubmit function");
+        const response = await onSubmit(submitData);
+        console.log("Response from parent onSubmit:", response);
         
-        setTimeout(() => {
-          onClose(); 
-        }, 1500);
-
+        // The parent component will handle the rest, but we still update our local state
+        if (response && (response.id || response.data?.id)) {
+          setSuccess(true);
+        } else {
+          throw new Error("La réponse du serveur n'est pas valide.");
+        }
       } else {
-        // Handle API error responses (e.g., validation errors from Laravel)
-        let mainErrorMessage = "La création de la formation a échoué.";
-        
-        if (response && response.message) {
-            mainErrorMessage = response.message;
-        } else if (typeof response === 'string') {
-            mainErrorMessage = response;
-        }
-
-        setError(mainErrorMessage);
-        toast.error("Échec de la création", { description: mainErrorMessage });
-
-        if (response && response.errors) {
-            Object.entries(response.errors).forEach(([field, messages]) => {
-                if (Array.isArray(messages)) {
-                    messages.forEach(message => {
-                        toast.error(`Erreur (${field}): ${message}`, { duration: 5000 });
-                    });
-                }
-            });
-        }
-        console.error("Échec de la création de la formation:", mainErrorMessage, response);
+        throw new Error("Fonction onSubmit non disponible. Veuillez réessayer.");
       }
-      
     } catch (err) {
-      console.error("Erreur interne lors de la création de la formation:", err);
-      let mainErrorMessage = "Une erreur interne s'est produite. Veuillez réessayer.";
+      console.error("Erreur lors de la création de la formation:", err);
       
-      if (err && err.data && err.data.message) {
-        mainErrorMessage = err.data.message;
-      } else if (err && err.message) {
-        mainErrorMessage = err.message;
-      }
-
-      if (err && err.data && err.data.error) {
-        setError(mainErrorMessage);
-        const fieldErrors = err.data.error;
-        if (typeof fieldErrors === 'object' && fieldErrors !== null) {
-            Object.entries(fieldErrors).forEach(([field, messages]) => {
-                if (Array.isArray(messages)) {
-                    messages.forEach(message => {
-                        toast.error(`Erreur (${field}): ${message}`, { duration: 5000 });
-                    });
-                }
-            });
-        } else if (typeof fieldErrors === 'string') {
-            toast.error(fieldErrors, { duration: 5000 });
-        }
-      } else {
-        setError(mainErrorMessage);
-        toast.error("Échec de la création", { description: mainErrorMessage });
-      }
+      // Handle error locally too
+      setError(err.message || "Une erreur est survenue lors de la création de la formation.");
+      toast.error("Échec de la création", { 
+        description: err.message || "Une erreur inattendue s'est produite." 
+      });
     } finally {
       setIsLoading(false);
     }
@@ -595,6 +555,7 @@ export default function CreateFormationForm({ onClose }) {
             type="submit"
             className="w-full sm:w-auto bg-[#415444] hover:bg-[#415444]/90"
             disabled={isLoading || Object.keys(validationErrors).length > 0}
+            onClick={handleSubmit}
           >
             {isLoading ? (
               <>
@@ -605,6 +566,41 @@ export default function CreateFormationForm({ onClose }) {
               "Créer Formation"
             )}
           </Button>
+        </div>
+
+        {/* Debug section */}
+        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button
+            type="button"
+            className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 flex items-center"
+            onClick={() => setShowDebug(!showDebug)}
+          >
+            <span className="mr-1">{showDebug ? '↑' : '↓'}</span>
+            {showDebug ? 'Masquer le mode debug' : 'Afficher le mode debug'}
+          </button>
+          
+          {showDebug && (
+            <div className="mt-2 bg-gray-100 dark:bg-gray-800 p-3 rounded-md text-xs overflow-auto max-h-48">
+              <h4 className="font-bold mb-2">État du formulaire:</h4>
+              <div>
+                <p><strong>Validation errors:</strong> {Object.keys(validationErrors).length > 0 ? 'Oui' : 'Non'}</p>
+                {Object.keys(validationErrors).length > 0 && (
+                  <ul className="list-disc ml-4 mt-1 text-red-500">
+                    {Object.entries(validationErrors).map(([field, error]) => (
+                      <li key={field}>{field}: {error}</li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-2"><strong>Données du formulaire:</strong></p>
+                <pre className="mt-1 overflow-x-auto">
+                  {JSON.stringify(formData, null, 2)}
+                </pre>
+                <p className="mt-2"><strong>État de soumission:</strong> {isLoading ? 'En cours...' : (success ? 'Succès' : 'Prêt')}</p>
+                <p><strong>Fonction onSubmit disponible:</strong> {typeof onSubmit === 'function' ? 'Oui' : 'Non'}</p>
+                <p><strong>Profile ID:</strong> {profile?.id || 'Non disponible'}</p>
+              </div>
+            </div>
+          )}
         </div>
       </form>
     </div>
