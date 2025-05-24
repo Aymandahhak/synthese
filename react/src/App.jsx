@@ -20,6 +20,7 @@ import Absences from './pages/responsable-formation/Absences';
 import Documents from './pages/responsable-formation/Documents';
 import Logistics from './pages/responsable-formation/Logistics';
 import ReportsPage from './pages/responsable-formation/Reports';
+import FormationDetails from './pages/responsable-formation/FormationDetails';
 import LoginPage from './pages/login/LoginPage';
 //responsable_cdc
 import FormationPage from './pages/responsable-cdc/FormationPage';
@@ -76,6 +77,7 @@ function App() {
             <Route path="documents" element={<Documents />} />
             <Route path="logistics" element={<Logistics />} />
             <Route path="rapports" element={<ReportsPage />} />
+            <Route path="formations/:id" element={<FormationDetails />} />
           </Route>
           
           {/* RP route alias for the responsable-formation */}
@@ -89,6 +91,7 @@ function App() {
             <Route path="documents" element={<Documents />} />
             <Route path="logistics" element={<Logistics />} />
             <Route path="rapports" element={<ReportsPage />} />
+            <Route path="formations/:id" element={<FormationDetails />} />
           </Route>
           {/* responsable_cdc */}
            <Route path="/responsable-cdc">

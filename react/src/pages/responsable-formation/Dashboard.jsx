@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react"
-import { BarChart, Bell, Calendar, CheckSquare, FileText, Home, ListChecks, LogOut, Search, UserX } from "lucide-react"
+import { BarChart, Bell, Calendar, CheckSquare, FileText, Home, ListChecks, LogOut, Search, UserX, CheckCircle, Wifi, WifiOff, AlertTriangle, XCircle } from "lucide-react"
 import { Badge } from "@/components/responsable-formation/ui/badge"
 import { Button } from "@/components/responsable-formation/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/responsable-formation/ui/card"
@@ -8,12 +8,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import CreateFormationForm from "@/components/responsable-formation/CreateFormationForm"
 import { useProfile } from "@/hooks/useProfile"
 import { useFormations } from "@/hooks/useFormations"
-import { publicApi } from "@/services/api"
+import { publicApi, createFormation, testApiConnection } from "@/services/api"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "@/components/responsable-formation/ui/alert"
 import { useTheme } from "@/contexts/ThemeContext"
 import { format, addDays } from "date-fns"
-import { CheckCircle } from "lucide-react"
 
 // Component to render individual dashboard cards
 const DashboardCard = ({ title, description, icon, link, image }) => {
@@ -60,105 +59,21 @@ const Dashboard = () => {
     success: false,
     error: null
   });
+  const [apiStatus, setApiStatus] = useState({
+    connected: false,
+    checking: true,
+    message: "Vérification de la connexion à l'API..."
+  });
+  const [notification, setNotification] = useState({
+    show: false,
+    type: "",
+    message: "",
+    details: ""
+  });
 
   // Fetch profile and formations data
   const { profile, loading: profileLoading, error: profileError, refreshProfile } = useProfile();
   const { formations, loading: formationsLoading, error: formationsError, refreshFormations: refreshFormationsHook } = useFormations();
-
-  // Function to refresh formations data
-  const refreshFormations = useCallback(() => {
-    setIsLoading(true);
-    fetchFormations();
-    refreshFormationsHook();
-  }, [refreshFormationsHook]);
-
-  // Handle form submission
-  const handleFormSubmit = useCallback(async (formData) => {
-    setSubmissionStatus({
-      isSubmitting: true,
-      success: false,
-      error: null
-    });
-
-    try {
-      console.log("Submitting formation:", formData);
-      
-      // Call API to create formation with the enhanced API service
-      const response = await publicApi.createFormation(formData);
-
-      console.log("Formation creation response:", response);
-
-      // If successful, update state and display success message
-      if (response && (response.id || response.data?.id)) {
-        const formationData = response.data || response;
-        
-        setSubmissionStatus({
-          isSubmitting: false,
-          success: true,
-          error: null
-        });
-
-        // Show success message with details
-        toast.success(`Formation "${formationData.titre || formData.titre}" créée avec succès`, {
-          description: `La formation a été ajoutée avec le statut: ${formationData.statut || 'validée'}`,
-          position: 'top-center',
-          duration: 5000,
-          action: {
-            label: 'Voir Détails',
-            onClick: () => navigate(`/profile/formations/${formationData.id}`)
-          }
-        });
-
-        // Close dialog and refresh formations
-        setTimeout(() => {
-          setIsCreateFormOpen(false);
-          refreshFormations();
-          refreshProfile();
-        }, 1500);
-
-        return response;
-      } else {
-        // Show error for unexpected response format
-        throw new Error("Format de réponse inattendu");
-      }
-    } catch (error) {
-      console.error("Error creating formation:", error);
-
-      // Error handling with detailed message
-      let errorMessage = error?.response?.data?.message ||
-        error.message ||
-        "Une erreur est survenue lors de la création de la formation.";
-
-      setSubmissionStatus({
-        isSubmitting: false,
-        success: false,
-        error: errorMessage
-      });
-
-      // Show error with details
-      toast.error("Échec de création", {
-        description: errorMessage,
-        position: 'top-center',
-        duration: 7000
-      });
-
-      // If there are field-specific errors, show them too
-      if (error?.response?.data?.errors) {
-        Object.entries(error.response.data.errors).forEach(([field, messages]) => {
-          if (Array.isArray(messages)) {
-            messages.forEach(message => {
-              toast.error(`Erreur dans le champ ${field}`, {
-                description: message,
-                duration: 5000
-              });
-            });
-          }
-        });
-      }
-
-      return null;
-    }
-  }, [refreshFormations, refreshProfile, navigate]);
 
   // Function to fetch formations directly from API
   const fetchFormations = useCallback(async () => {
@@ -166,11 +81,27 @@ const Dashboard = () => {
     setError(null);
 
     try {
+      console.log("Fetching formations from API...");
       const result = await publicApi.getFormations();
+      console.log("Formations API response:", result);
+      
       if (result && result.data) {
-        setFormationsData(Array.isArray(result.data) ? result.data : []);
+        // Format and store the formations
+        const formattedData = Array.isArray(result.data) ? result.data.map(formation => ({
+          id: formation.id,
+          name: formation.titre || formation.name,
+          status: formation.statut || formation.status,
+          image: formation.image || "/logo-ofppt-1.jpg",
+          description: formation.description || "",
+          date_debut: formation.date_debut || "",
+          date_fin: formation.date_fin || "",
+        })) : [];
+        
+        console.log("Formatted formations:", formattedData);
+        setFormationsData(formattedData);
       } else {
         // Fallback to empty array if no data
+        console.warn("No formation data returned, using empty array");
         setFormationsData([]);
       }
     } catch (error) {
@@ -184,6 +115,339 @@ const Dashboard = () => {
     }
   }, []);
 
+  // Enhanced refresh function that ensures formations are updated
+  const refreshFormations = useCallback(() => {
+    console.log("Refreshing formations...");
+    setIsLoading(true);
+    
+    // Clear any previous formations to avoid stale data
+    setFormationsData([]);
+    
+    // Wait a short time before fetching (gives API time to update)
+    setTimeout(() => {
+      fetchFormations();
+      // Also refresh formations hook if available
+      if (refreshFormationsHook) {
+        refreshFormationsHook();
+      }
+    }, 500);
+  }, [fetchFormations, refreshFormationsHook]);
+
+  // Check API connection on component mount
+  useEffect(() => {
+    const checkApiConnection = async () => {
+      try {
+        setApiStatus({
+          connected: false,
+          checking: true,
+          message: "Vérification de la connexion à l'API..."
+        });
+        
+        // Simple fetch to check if the API is reachable
+        const response = await fetch("http://localhost:8000/api/test", { 
+          method: "GET",
+          headers: { "Accept": "application/json" },
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        }).catch(() => null);
+        
+        if (response && response.ok) {
+          setApiStatus({
+            connected: true,
+            checking: false,
+            message: "Connecté à l'API Laravel"
+          });
+        } else {
+          setApiStatus({
+            connected: false,
+            checking: false,
+            message: "Non connecté à l'API Laravel - Mode démo activé"
+          });
+          console.warn("API Laravel non disponible. Mode démo activé.");
+        }
+      } catch (error) {
+        setApiStatus({
+          connected: false,
+          checking: false,
+          message: "Erreur de connexion à l'API Laravel - Mode démo activé"
+        });
+        console.error("Erreur lors de la vérification de l'API:", error);
+      }
+    };
+    
+    checkApiConnection();
+  }, []);
+
+  // Add a direct formation creation function with better error handling
+  const directCreateFormation = async (formData) => {
+    // Show toast that we're trying to create the formation
+    toast({
+      title: "Création directe en cours...",
+      description: "Tentative de création avec méthode alternative"
+    });
+    
+    try {
+      // Convert FormData to simple object
+      const formValues = {};
+      
+      if (formData instanceof FormData) {
+        for (const [key, value] of formData.entries()) {
+          formValues[key] = value;
+        }
+      } else {
+        Object.assign(formValues, formData);
+      }
+      
+      // Add required fields if missing
+      if (!formValues.responsable_id) {
+        formValues.responsable_id = 1;
+      }
+      if (!formValues.statut) {
+        formValues.statut = 'en_attente_validation';
+      }
+      
+      // Make a direct API call
+      const response = await fetch('http://localhost:8000/diagnostic-create-formation?' + 
+        new URLSearchParams({
+          titre: formValues.titre || 'Formation sans titre',
+          description: formValues.description || 'Formation sans description',
+          date_debut: formValues.date_debut || '2025-06-01',
+          date_fin: formValues.date_fin || '2025-06-30',
+          lieu: formValues.lieu || 'Non spécifié',
+          capacite_max: formValues.capacite_max || 20
+        }).toString()
+      );
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: "Formation créée avec succès",
+          description: "Méthode de diagnostic alternative réussie",
+          variant: "success"
+        });
+        
+        // Refresh formations
+        refreshFormations();
+        return data.formation;
+      } else {
+        console.error("Diagnostic error:", data);
+        toast({
+          title: "Erreur de diagnostic",
+          description: data.message + (data.error ? ': ' + data.error : ''),
+          variant: "destructive"
+        });
+        throw new Error(data.message || "Diagnostic error");
+      }
+    } catch (error) {
+      console.error("Direct creation error:", error);
+      toast({
+        title: "Erreur de création directe",
+        description: error.message,
+        variant: "destructive"
+      });
+      throw error;
+    }
+  };
+
+  // Handle form submission
+  const handleFormSubmit = useCallback(async (formData) => {
+    setSubmissionStatus({
+      isSubmitting: true,
+      success: false,
+      error: null
+    });
+
+    try {
+      console.log("Submitting formation:", formData);
+      
+      // Show toast that we're trying to create the formation
+      toast({
+        title: "Création en cours...",
+        description: "Tentative de création de la formation"
+      });
+      
+      // Try to create formation
+      let response = null;
+      let creationError = null;
+      try {
+        // Call API to create formation with the imported function
+        response = await createFormation(formData);
+        console.log("Formation creation response:", response);
+      } catch (error) {
+        console.error("Error creating formation:", error);
+        creationError = error;
+        
+        // Try direct method as fallback
+        try {
+          console.log("Trying direct creation method as fallback...");
+          toast({
+            title: "Tentative alternative",
+            description: "Essai d'une méthode alternative de création"
+          });
+          
+          response = await directCreateFormation(formData);
+          console.log("Direct creation response:", response);
+          
+          // If we got here, the direct method worked!
+          creationError = null;
+        } catch (directError) {
+          console.error("Direct creation failed too:", directError);
+          
+          // Keep original error if we have one
+          if (!creationError) {
+            creationError = directError;
+          }
+        }
+      }
+      
+      // If we still have an error after trying both methods
+      if (creationError) {
+        setError(`Erreur lors de la création: ${creationError.message}`);
+        
+        // Show toast for creation error
+        toast({
+          title: "Échec de création",
+          description: creationError.message || "Le serveur a rencontré une erreur interne",
+          variant: "destructive"
+        });
+        
+        // Set error notification banner
+        setNotification({
+          show: true,
+          type: "error",
+          message: "Échec de la création de formation",
+          details: creationError.message || "Le serveur a rencontré une erreur interne (500). Réessayez plus tard."
+        });
+        
+        // Auto hide after 10 seconds
+        setTimeout(() => {
+          setNotification(prev => ({...prev, show: false}));
+        }, 10000);
+        
+        // Close dialog on error after a short delay
+        setTimeout(() => {
+          setIsCreateFormOpen(false);
+        }, 2000);
+        
+        return;
+      }
+
+      // Always refresh formations regardless of response
+      try {
+        console.log("Refreshing formations after creation attempt...");
+        await fetchFormations();
+      } catch (refreshError) {
+        console.error("Error refreshing formations:", refreshError);
+      }
+
+      // Set success/error status
+      if (response && (response.id || response.data?.id)) {
+        setSubmissionStatus({
+          isSubmitting: false,
+          success: true,
+          error: null
+        });
+        
+        // Show success toast
+        toast({
+          title: "Formation créée avec succès",
+          description: `La formation "${formData.get ? formData.get('titre') : formData.titre}" a été ajoutée à la liste`,
+          variant: "success"
+        });
+        
+        // Display success notification banner
+        setNotification({
+          show: true,
+          type: "success",
+          message: "Formation créée avec succès",
+          details: `La formation "${formData.get ? formData.get('titre') : formData.titre}" a été ajoutée`
+        });
+        
+        // Auto hide after 7 seconds
+        setTimeout(() => {
+          setNotification(prev => ({...prev, show: false}));
+        }, 7000);
+        
+        // Close the form and show success message
+        setIsCreateFormOpen(false);
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => {
+          setSubmissionStatus({
+            isSubmitting: false,
+            success: false,
+            error: null
+          });
+        }, 5000);
+      } else {
+        // Still close the form if we refreshed formations successfully
+        if (!error) {
+          setIsCreateFormOpen(false);
+          
+          // Show warning notification
+          setNotification({
+            show: true,
+            type: "warning",
+            message: "État de la création incertain",
+            details: "La formation a peut-être été créée, mais nous n'avons pas reçu de confirmation. Vérifiez la liste des formations."
+          });
+          
+          // Auto hide after 8 seconds
+          setTimeout(() => {
+            setNotification(prev => ({...prev, show: false}));
+          }, 8000);
+          
+          setTimeout(() => {
+            setSubmissionStatus({
+              isSubmitting: false,
+              success: false,
+              error: null
+            });
+          }, 5000);
+        } else {
+          setSubmissionStatus({
+            isSubmitting: false,
+            success: false,
+            error: "Création de formation échouée"
+          });
+          
+          // Show error notification
+          setNotification({
+            show: true,
+            type: "error",
+            message: "Création de formation échouée",
+            details: error || "Une erreur serveur s'est produite. Veuillez réessayer plus tard."
+          });
+          
+          // Auto hide after 10 seconds
+          setTimeout(() => {
+            setNotification(prev => ({...prev, show: false}));
+          }, 10000);
+        }
+      }
+    } catch (error) {
+      console.error("Error in handleFormSubmit:", error);
+      setSubmissionStatus({
+        isSubmitting: false,
+        success: false,
+        error: error.message || "Erreur lors de la création de la formation"
+      });
+      
+      // Show error notification
+      setNotification({
+        show: true,
+        type: "error",
+        message: "Erreur de création de formation",
+        details: error.message || "Une erreur inattendue s'est produite"
+      });
+      
+      // Auto hide after 10 seconds
+      setTimeout(() => {
+        setNotification(prev => ({...prev, show: false}));
+      }, 10000);
+    }
+  }, [fetchFormations, error, directCreateFormation]);
+
   // Initial fetch of formations
   useEffect(() => {
     fetchFormations();
@@ -194,51 +458,134 @@ const Dashboard = () => {
     try {
       setIsLoading(true);
       
-      // Sample formation data
-      const sampleFormations = [
-        {
-          titre: "Développement Web Moderne",
-          description: "Formation complète sur les technologies web modernes incluant HTML5, CSS3, JavaScript, React et Node.js.",
-          date_debut: format(new Date(), 'yyyy-MM-dd'),
-          date_fin: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
-          lieu: "Centre de Formation OFPPT - Casablanca",
-          capacite_max: 25,
-          image: "/images/hero.png" // Using existing image in public folder
-        },
-        {
-          titre: "Formation des Formateurs Pédagogiques",
-          description: "Techniques avancées de pédagogie et d'enseignement pour les formateurs de l'OFPPT.",
-          date_debut: format(addDays(new Date(), 7), 'yyyy-MM-dd'),
-          date_fin: format(addDays(new Date(), 21), 'yyyy-MM-dd'),
-          lieu: "Centre Développement Compétences - Rabat",
-          capacite_max: 20,
-          image: "/images/dark.png" // Using existing image in public folder
-        }
-      ];
-
-      // Create each sample formation
-      for (const formationData of sampleFormations) {
-        // Use FormData to handle file upload simulation
-        const formData = new FormData();
-        Object.entries(formationData).forEach(([key, value]) => {
-          formData.append(key, value);
+      // Call the seed endpoint
+      toast("Initialisation des formations...", {
+        description: "Suppression des formations existantes et création de nouvelles formations d'exemple",
+        duration: 3000
+      });
+      
+      const response = await fetch("http://localhost:8000/seed-formations");
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: "Formations réinitialisées",
+          description: `${data.count} formations d'exemple ont été créées avec succès`,
+          duration: 5000
         });
-
-        // If we have a real image file path, we could add it here
-        // For now, using existing images in the public folder
-        
-        // Create formation using the API
-        await publicApi.createFormation(formData);
+        // Refresh formations list after creating samples
+        refreshFormations();
+        refreshProfile();
+      } else {
+        toast({
+          title: "Erreur",
+          description: data.error || "Une erreur est survenue lors de la réinitialisation des formations",
+          duration: 5000,
+          variant: "destructive"
+        });
       }
+    } catch (error) {
+      console.error("Error creating sample formations:", error);
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de communiquer avec le serveur pour réinitialiser les formations",
+        duration: 5000,
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      // Refresh formations list after creating samples
-      toast.success("Formations d'exemple créées avec succès!");
+  // Add database fix function
+  const fixDatabaseIssues = async () => {
+    try {
+      setIsLoading(true);
+      
+      toast("Vérification de la base de données...", {
+        description: "Tentative de réparation des problèmes courants"
+      });
+      
+      // First run database-fix endpoint
+      const dbFixResponse = await fetch("http://localhost:8000/database-fix");
+      const dbFixData = await dbFixResponse.json();
+      
+      console.log("Database fix response:", dbFixData);
+      
+      // Then fix Sanctum specifically
+      toast("Réparation de Sanctum...", {
+        description: "Création de la table d'authentification"
+      });
+      
+      try {
+        const sanctumResponse = await fetch("http://localhost:8000/fix-sanctum");
+        const sanctumData = await sanctumResponse.json();
+        console.log("Sanctum fix response:", sanctumData);
+        
+        if (sanctumData.status === 'success') {
+          toast({
+            title: "Sanctum réparé",
+            description: "Authentification réparée avec succès",
+            duration: 3000
+          });
+        }
+      } catch (sanctumError) {
+        console.error("Sanctum fix error:", sanctumError);
+      }
+      
+      // Then run general migrations
+      toast("Exécution des migrations...", {
+        description: "Mise à jour de la structure de la base de données"
+      });
+      
+      try {
+        const migrateResponse = await fetch("http://localhost:8000/run-migrations");
+        const migrateData = await migrateResponse.json();
+        console.log("Migrations response:", migrateData);
+      } catch (migrateError) {
+        console.error("Migration error:", migrateError);
+        toast({
+          title: "Erreur de migration",
+          description: "Impossible d'exécuter les migrations, mais certaines réparations ont pu réussir",
+          variant: "destructive",
+          duration: 5000
+        });
+      }
+      
+      if (dbFixData.status === 'success') {
+        // Check if any fixes were applied
+        if (dbFixData.fixes && dbFixData.fixes.length > 0) {
+          toast({
+            title: "Base de données réparée",
+            description: `${dbFixData.fixes.length} problème(s) résolus. Veuillez réessayer de créer une formation.`,
+            duration: 5000
+          });
+        } else {
+          toast({
+            title: "Base de données vérifiée",
+            description: "Aucun problème détecté nécessitant une réparation.",
+            duration: 5000
+          });
+        }
+      } else {
+        toast({
+          title: "Problèmes non résolus",
+          description: "Certains problèmes n'ont pas pu être résolus automatiquement.",
+          variant: "destructive",
+          duration: 5000
+        });
+      }
+      
+      // Always refresh formations after database fix attempt
       refreshFormations();
       refreshProfile();
     } catch (error) {
-      console.error("Error creating sample formations:", error);
-      toast.error("Erreur lors de la création des formations d'exemple", {
-        description: error.message || "Veuillez réessayer plus tard."
+      console.error("Error fixing database:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de communiquer avec le serveur pour réparer la base de données",
+        variant: "destructive",
+        duration: 5000
       });
     } finally {
       setIsLoading(false);
@@ -304,18 +651,49 @@ const Dashboard = () => {
   ];
 
   // Modify the formattedFormations line to include fallback
-  const formattedFormations = allFormations.length > 0 ? allFormations.map(formation => ({
-    id: formation.id,
-    name: formation.titre || formation.name,
-    status: formation.statut || formation.status,
-    image: formation.image || "/logo-ofppt-1.jpg", // Default image fallback
-    description: formation.description || "",
-    date_debut: formation.date_debut || "",
-    date_fin: formation.date_fin || ""
-  })) : fallbackFormations;
+  const formattedFormations = allFormations.length > 0 ? allFormations : fallbackFormations;
 
   return (
     <>
+      {/* Notification Banner */}
+      {notification.show && (
+        <div className={`fixed top-0 left-0 right-0 z-50 p-4 ${
+          notification.type === 'success' ? 'bg-green-100 text-green-800' : 
+          notification.type === 'error' ? 'bg-red-100 text-red-800' :
+          'bg-amber-100 text-amber-800'
+        } shadow-md transition-all duration-300 ease-in-out flex items-start justify-between`}>
+          <div className="flex items-start">
+            {notification.type === 'success' && <CheckCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />}
+            {notification.type === 'error' && <XCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />}
+            {notification.type === 'warning' && <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />}
+            <div>
+              <div className="font-semibold">{notification.message}</div>
+              <div className="text-sm">{notification.details}</div>
+            </div>
+          </div>
+          <button 
+            onClick={() => setNotification(prev => ({...prev, show: false}))}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <XCircle className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
+      {/* API Status Indicator */}
+      <div className={`fixed bottom-4 right-4 z-50 px-3 py-2 rounded-full flex items-center gap-2 text-sm ${
+        apiStatus.connected ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+      }`}>
+        {apiStatus.checking ? (
+          <div className="h-3 w-3 rounded-full bg-gray-400 animate-pulse"></div>
+        ) : apiStatus.connected ? (
+          <Wifi className="h-4 w-4" />
+        ) : (
+          <WifiOff className="h-4 w-4" />
+        )}
+        <span>{apiStatus.message}</span>
+      </div>
+
       {/* Added Logo Image with rotation */}
       <div className="flex justify-center mb-4">
         <img
@@ -479,30 +857,45 @@ const Dashboard = () => {
 
       <div className="mb-8 flex items-center justify-between">
         <h3 className="text-2xl font-semibold">Liste des Formations</h3>
-        <Button variant="outline" onClick={refreshFormations} className="mr-2">
+        <div className="flex flex-row space-x-2">
+          <Button onClick={fixDatabaseIssues} variant="outline" className="mr-2 text-amber-600 border-amber-300 hover:bg-amber-50">
+            Réparer Base de Données
+          </Button>
+          <Button onClick={createSampleFormation} variant="outline" className="mr-2">
+            Réinitialiser Formations
+          </Button>
+          <Button variant="outline" onClick={refreshFormations}>
           Rafraîchir
         </Button>
+        </div>
       </div>
 
       {formattedFormations.length === 0 ? (
         <Card className="p-8 text-center mb-8">
           <CardTitle className="mb-2">Aucune formation disponible</CardTitle>
           <CardDescription className="mb-4">
-            Vous n'avez pas encore créé de formations. Commencez par en créer une nouvelle ou utilisez nos exemples.
+            Vous n'avez pas encore créé de formations. Commencez par en créer une nouvelle ou réinitialisez la base de données avec des exemples.
           </CardDescription>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <Button
-              onClick={() => setIsCreateFormOpen(true)}
-              className="bg-[#415444] hover:bg-[#415444]/90"
-            >
-              Créer une Formation
-            </Button>
+          <Button
+            onClick={() => setIsCreateFormOpen(true)}
+            className="bg-[#415444] hover:bg-[#415444]/90"
+          >
+            Créer une Formation
+          </Button>
             <Button
               onClick={createSampleFormation}
               variant="outline"
               className="border-[#415444] text-[#415444] hover:bg-[#415444] hover:text-white"
             >
-              Créer des Exemples
+              Réinitialiser avec Exemples
+            </Button>
+            <Button
+              onClick={fixDatabaseIssues}
+              variant="outline"
+              className="border-amber-400 text-amber-600 hover:bg-amber-50"
+            >
+              Réparer la Base de Données
             </Button>
           </div>
         </Card>
@@ -522,9 +915,13 @@ const Dashboard = () => {
                   Voir Détails
                 </Button>
                 <img
-                  src={formation.image || "/placeholder.svg"}
+                  src={formation.image || "/logo-ofppt-1.jpg"}
                   alt={formation.name}
                   className="h-[280px] w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  onError={(e) => {
+                    e.target.onerror = null; // Prevent infinite loop
+                    e.target.src = "/logo-ofppt-1.jpg"; // Fallback image
+                  }}
                 />
               </CardHeader>
               <CardContent className="p-6 space-y-4">

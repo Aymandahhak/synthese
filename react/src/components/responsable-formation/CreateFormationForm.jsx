@@ -5,14 +5,15 @@ import { Textarea } from "@/components/responsable-formation/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/responsable-formation/ui/select";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Wifi, WifiOff } from "lucide-react";
 import { format, isAfter, addDays, parseISO } from "date-fns";
 import { fr } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
-import { createFormation } from "@/services/api";
+import { createFormation, testApiConnection } from "@/services/api";
 import { useFormations } from "@/hooks/useFormations";
 import { useToast } from "@/components/responsable-formation/ui/use-toast";
 import { useProfile } from "@/hooks/useProfile";
+import { Alert, AlertTitle, AlertDescription } from "@/components/responsable-formation/ui/alert";
 
 // Sample data for trainers - will be replaced by API data in future implementation
 const trainers = [
@@ -43,6 +44,7 @@ export default function CreateFormationForm({ onClose, onSubmit }) {
   const [filieres, setFilieres] = useState([]);
   const [formationImage, setFormationImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [apiConnected, setApiConnected] = useState(false);
 
   const [formData, setFormData] = useState({
     titre: "",
@@ -61,6 +63,7 @@ export default function CreateFormationForm({ onClose, onSubmit }) {
   const [validationErrors, setValidationErrors] = useState({});
   const [success, setSuccess] = useState(false);
   const [showDebug, setShowDebug] = useState(false); // Add state for debug mode
+  const [isDebugMode, setIsDebugMode] = useState(false);
 
   // Vérifier l'état des formations au montage et après les mises à jour
   useEffect(() => {
@@ -189,6 +192,27 @@ export default function CreateFormationForm({ onClose, onSubmit }) {
     }
   }, [profile]);
 
+  // Check API connection on mount
+  useEffect(() => {
+    const checkApiConnection = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/api/test", { 
+          method: "GET",
+          headers: { "Accept": "application/json" },
+          signal: AbortSignal.timeout(3000) // 3 second timeout
+        }).catch(() => null);
+        
+        setApiConnected(!!response?.ok);
+        console.log("API connection status:", !!response?.ok);
+      } catch (error) {
+        setApiConnected(false);
+        console.warn("API connection check failed:", error);
+      }
+    };
+    
+    checkApiConnection();
+  }, []);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -288,22 +312,23 @@ export default function CreateFormationForm({ onClose, onSubmit }) {
       
     try {
       console.log("Form data valid, preparing to submit:", formData);
+      console.log("onSubmit function type:", typeof onSubmit);
       
       // Create FormData object for multipart/form-data request (needed for file upload)
       const submitData = new FormData();
       
       // Add all form fields to FormData
-      Object.keys(formData).forEach(key => {
-        if (formData[key] !== undefined && formData[key] !== null) {
-          submitData.append(key, formData[key]);
-          console.log(`Adding field ${key}:`, formData[key]);
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          submitData.append(key, value);
+          console.log(`Adding field ${key}:`, value);
         }
       });
       
       // Add the image file if selected
       if (formationImage) {
         submitData.append('image', formationImage);
-        console.log("Adding image file:", formationImage.name);
+        console.log("Adding image:", formationImage.name);
       }
       
       // Ensure responsable_id is set
@@ -316,28 +341,66 @@ export default function CreateFormationForm({ onClose, onSubmit }) {
       
       console.log('FormData prêt à être envoyé:', Object.fromEntries(submitData.entries()));
       
-      // Use the parent component's onSubmit handler to submit the form
+      // DECISION POINT: Try parent's onSubmit handler if available, otherwise use direct API call
+      let response;
+      
       if (typeof onSubmit === 'function') {
-        console.log("Calling parent onSubmit function");
-        const response = await onSubmit(submitData);
-        console.log("Response from parent onSubmit:", response);
-        
-        // The parent component will handle the rest, but we still update our local state
-        if (response && (response.id || response.data?.id)) {
-          setSuccess(true);
-        } else {
-          throw new Error("La réponse du serveur n'est pas valide.");
+        console.log("Using parent component's onSubmit handler");
+        try {
+          response = await onSubmit(submitData);
+          console.log("Response from parent onSubmit:", response);
+        } catch (parentError) {
+          console.error("Error in parent's onSubmit handler:", parentError);
+          throw new Error(`Erreur dans onSubmit parent: ${parentError.message || 'Erreur inconnue'}`);
         }
       } else {
-        throw new Error("Fonction onSubmit non disponible. Veuillez réessayer.");
+        // Fallback: Use direct API call
+        console.log("Parent onSubmit not available, using direct API call");
+        try {
+          response = await createFormation(submitData);
+          console.log("Direct API response:", response);
+        } catch (apiError) {
+          console.error("Direct API call failed:", apiError);
+          throw new Error(`Appel API direct échoué: ${apiError.message || 'Erreur inconnue'}`);
+        }
+      }
+      
+      // Handle the response
+      if (response && (response.id || response.data?.id)) {
+        console.log("Formation created successfully:", response);
+        
+        // Show success message
+        toast.success("Formation créée avec succès!", {
+          description: `La formation "${response.titre || formData.titre}" a été ajoutée.`,
+          duration: 5000
+        });
+        
+        setSuccess(true);
+        
+        // Refresh formations list if available
+        if (refreshFormations) {
+          console.log("Refreshing formations list");
+          refreshFormations();
+        }
+        
+        // Close the dialog after a delay
+        setTimeout(() => {
+          if (typeof onClose === 'function') onClose();
+        }, 1500);
+      } else {
+        console.error("Invalid API response:", response);
+        throw new Error("La réponse du serveur n'est pas dans le format attendu");
       }
     } catch (err) {
       console.error("Erreur lors de la création de la formation:", err);
       
-      // Handle error locally too
-      setError(err.message || "Une erreur est survenue lors de la création de la formation.");
-      toast.error("Échec de la création", { 
-        description: err.message || "Une erreur inattendue s'est produite." 
+      // Set local error state
+      setError(err.message || "Une erreur est survenue lors de la création");
+      
+      // Show error toast
+      toast.error("Erreur de création", {
+        description: err.message || "Une erreur inattendue s'est produite",
+        duration: 7000
       });
     } finally {
       setIsLoading(false);
@@ -360,7 +423,7 @@ export default function CreateFormationForm({ onClose, onSubmit }) {
   }
 
   return (
-    <div className="max-h-[80vh] overflow-y-auto p-2"> {/* Added scrollable container */}
+    <div className="max-h-[80vh] overflow-y-auto p-2">
       <form onSubmit={handleSubmit} className="space-y-6 p-1">
         {error && (
           <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm flex items-start">
@@ -368,6 +431,26 @@ export default function CreateFormationForm({ onClose, onSubmit }) {
             <span>{error}</span>
           </div>
         )}
+
+        {/* API Connection Status */}
+        <div className="flex items-center gap-2 p-2 rounded-md bg-gray-50 dark:bg-gray-800 text-sm">
+          {apiConnected ? (
+            <>
+              <Wifi className="h-4 w-4 text-green-600" />
+              <span className="text-green-600 font-medium">API Laravel connectée</span>
+            </>
+          ) : (
+            <>
+              <WifiOff className="h-4 w-4 text-amber-600" />
+              <Alert variant="warning" className="mb-4 bg-amber-50 border-amber-200 text-amber-800">
+                <AlertTitle className="text-sm">Mode démo activé</AlertTitle>
+                <AlertDescription className="text-xs">
+                  L'API Laravel n'est pas accessible. Les données créées seront simulées et ne seront pas enregistrées dans la base de données.
+                </AlertDescription>
+              </Alert>
+            </>
+          )}
+        </div>
 
         <div className="space-y-2">
           <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
@@ -598,9 +681,45 @@ export default function CreateFormationForm({ onClose, onSubmit }) {
                 <p className="mt-2"><strong>État de soumission:</strong> {isLoading ? 'En cours...' : (success ? 'Succès' : 'Prêt')}</p>
                 <p><strong>Fonction onSubmit disponible:</strong> {typeof onSubmit === 'function' ? 'Oui' : 'Non'}</p>
                 <p><strong>Profile ID:</strong> {profile?.id || 'Non disponible'}</p>
+                <p><strong>API Laravel connectée:</strong> {apiConnected ? 'Oui' : 'Non'}</p>
+                <p><strong>Type de soumission:</strong> {typeof onSubmit === 'function' ? 'Via parent' : 'Direct API'}</p>
               </div>
             </div>
           )}
+        </div>
+
+        {isDebugMode && (
+          <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-md mt-4 text-xs overflow-auto">
+            <h4 className="font-semibold mb-1">État du formulaire:</h4>
+            <p className="mb-2">Validation errors: {Object.keys(validationErrors).length > 0 ? 'Oui' : 'Non'}</p>
+            
+            <h4 className="font-semibold mb-1">Données du formulaire:</h4>
+            <pre className="whitespace-pre-wrap">{JSON.stringify(formData, null, 2)}</pre>
+            
+            <h4 className="font-semibold mt-3 mb-1">État de soumission:</h4>
+            <p>{isLoading ? 'En cours...' : 'Prêt'}</p>
+            
+            <h4 className="font-semibold mt-3 mb-1">Fonction onSubmit disponible:</h4>
+            <p>{typeof onSubmit === 'function' ? 'Oui' : 'Non'}</p>
+            
+            <h4 className="font-semibold mt-3 mb-1">Profile ID:</h4>
+            <p>{profile?.id || 'Non disponible'}</p>
+            
+            <h4 className="font-semibold mt-3 mb-1">API Laravel connectée:</h4>
+            <p>{apiConnected ? 'Oui' : 'Non'}</p>
+          </div>
+        )}
+
+        <div className="mt-4 flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="text-xs"
+            onClick={() => setIsDebugMode(!isDebugMode)}
+          >
+            {isDebugMode ? 'Masquer Débogage' : 'Mode Débogage'}
+          </Button>
         </div>
       </form>
     </div>

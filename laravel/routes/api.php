@@ -23,33 +23,113 @@ use App\Http\Controllers\Api\Responsablecdc\FormateurAnimateurController;
 use App\Http\Controllers\Api\Responsablecdc\UserController; 
 use App\Http\Controllers\Api\ResponsableCdc\GereFormationController;
 
-
+// Global CORS handling for all OPTIONS requests
+Route::options('/{any}', function() {
+    return response('', 200)
+        ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-CSRF-TOKEN')
+        ->header('Access-Control-Allow-Origin', '*');
+})->where('any', '.*');
 
 // Public route for testing API connection
 Route::get('/test', function () {
     return response()->json([
-        'message' => 'API connection successful',
-        'status' => 'ok',
-        'timestamp' => now()->toIso8601String(),
-        'environment' => config('app.env'),
-        'debug' => config('app.debug'),
-        'cors' => [
-            'origin' => request()->header('Origin'),
-            'allowed_origins' => env('CORS_ALLOWED_ORIGINS', 'not configured')
+        'status' => 'success',
+        'message' => 'API Laravel connectée et fonctionnelle',
+        'timestamp' => now()->toDateTimeString()
+    ]);
+});
+
+// Root test API endpoint
+Route::get('/root-test', function () {
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Root API test endpoint',
+        'timestamp' => now()->toDateTimeString(),
+        'laravel_version' => app()->version(),
+        'database_connected' => DB::connection()->getPdo() ? true : false,
+        'note' => 'This route is working because it\'s in api.php'
+    ]);
+});
+
+// Main connection endpoint for React
+Route::get('/main', function () {
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Connexion à l\'API Laravel réussie',
+        'timestamp' => now()->toDateTimeString(),
+        'api_status' => [
+            'version' => '1.0',
+            'laravel_version' => app()->version(),
+            'database_connected' => DB::connection()->getPdo() ? true : false,
+            'database_name' => DB::connection()->getDatabaseName(),
+            'tables' => [
+                'formations_exists' => Schema::hasTable('formations'),
+                'personal_access_tokens_exists' => Schema::hasTable('personal_access_tokens')
+            ]
+        ],
+        'endpoints' => [
+            'api_test' => '/api/connection-status',
+            'api_root_test' => '/api/root-test',
+            'diagnostic_routes' => [
+                'database_fix' => '/api/fix-database',
+                'test_create' => '/api/test-create-formation'
+            ]
         ]
     ]);
 });
 
 // Additional connection test endpoint specifically for the React app
-Route::get('/connection-test', function () {
-    return response()->json([
-        'message' => 'API connection successful',
-        'status' => 'ok',
-        'timestamp' => now()->toIso8601String(),
-        'environment' => config('app.env'),
-        'cors_origin' => request()->header('Origin'),
-        'debug_mode' => config('app.debug')
-    ]);
+Route::get('/connection-status', function () {
+    try {
+        $dbConnected = false;
+        $dbError = null;
+        $dbName = null;
+        $tables = [];
+        
+        try {
+            $connection = DB::connection()->getPdo();
+            $dbConnected = true;
+            $dbName = DB::connection()->getDatabaseName();
+            
+            // Check for essential tables
+            $tables = [
+                'formations' => Schema::hasTable('formations'),
+                'users' => Schema::hasTable('users'),
+                'personal_access_tokens' => Schema::hasTable('personal_access_tokens'),
+                'migrations' => Schema::hasTable('migrations')
+            ];
+        } catch (\Exception $e) {
+            $dbError = $e->getMessage();
+        }
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'API Connection Test Successful',
+            'timestamp' => now()->toDateTimeString(),
+            'laravel_version' => app()->version(),
+            'api_version' => '1.0',
+            'database' => [
+                'connected' => $dbConnected,
+                'name' => $dbName,
+                'error' => $dbError,
+                'tables' => $tables
+            ],
+            'request_info' => [
+                'ip' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+                'method' => request()->method(),
+                'path' => request()->path()
+            ]
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'API Connection Test Failed',
+            'error' => $e->getMessage(),
+            'timestamp' => now()->toDateTimeString()
+        ], 500);
+    }
 });
 
 // Public routes for development without authentication
@@ -81,68 +161,84 @@ Route::prefix('public')->group(function () {
         ]);
     });
     
+    // Route to get all formations from database
     Route::get('/responsable-formation/formations', function() {
-        // Temporary placeholder response
-        // THIS SHOULD LATER POINT TO ResponsableFormationController@index
+        // Get all formations from the database
+        $formations = \App\Models\Formation::orderBy('created_at', 'desc')->get();
+        
         return response()->json([
-            'message' => 'Liste des formations récupérée avec succès (public placeholder)',
-            'data' => [
-                [
-                    'id' => 1,
-                    'titre' => 'Formation React (Public)',
-                    // ... other fields
-                ]
-            ]
+            'message' => 'Liste des formations récupérée avec succès',
+            'data' => $formations
         ]);
     });
     
-    // COMMENT OUT or REMOVE this placeholder POST route as it doesn't save to DB
-    /*
+    // Route to get a specific formation by ID
+    Route::get('/responsable-formation/formations/{id}', function($id) {
+        try {
+            // Find the formation by ID
+            $formation = \App\Models\Formation::findOrFail($id);
+            
+            return response()->json([
+                'message' => 'Formation récupérée avec succès',
+                'data' => $formation
+            ]);
+        } catch (\Exception $e) {
+            // Log the error for debugging
+            \Log::error('Error fetching formation: ' . $e->getMessage());
+            
+            // Return error response
+            return response()->json([
+                'message' => 'Formation non trouvée',
+                'error' => $e->getMessage()
+            ], 404);
+        }
+    });
+    
+    // Route to create new formation (stores in database)
     Route::post('/responsable-formation/formations', function(Request $request) {
-        // Validate the incoming request
-        $validatedData = $request->validate([
-            'titre' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'date_debut' => 'required|date',
-            'date_fin' => 'required|date|after_or_equal:date_debut',
-            'lieu' => 'nullable|string|max:255',
-            'capacite_max' => 'nullable|integer|min:1',
-        ]);
-
-        // Return success response with the data
-        return response()->json([
-            'message' => 'Formation créée avec succès (Placeholder - Not Saved)',
-            'data' => array_merge($validatedData, [
-                'id' => rand(100, 999), // Generate random ID
-                'statut' => 'pending',
-                'created_at' => now()->toIso8601String()
-            ])
-        ], 201);
-    });
-    */
-    
-    // Fallback route for creating formations directly - also works for development
-    // Consider removing or securing this too if it's not saving to DB or if controller is preferred
-    Route::post('/responsable-formation/formations-direct', function(Request $request) {
-        // Validate the incoming request
-        $validatedData = $request->validate([
-            'titre' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'date_debut' => 'required|date',
-            'date_fin' => 'required|date|after_or_equal:date_debut',
-            'lieu' => 'nullable|string|max:255',
-            'capacite_max' => 'nullable|integer|min:1',
-        ]);
-
-        // Return success response with the data
-        return response()->json([
-            'message' => 'Formation créée avec succès (via route directe)',
-            'data' => array_merge($validatedData, [
-                'id' => rand(100, 999), // Generate random ID
-                'statut' => 'pending',
-                'created_at' => now()->toIso8601String()
-            ])
-        ], 201);
+        try {
+            // Validate the incoming request
+            $validatedData = $request->validate([
+                'titre' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'date_debut' => 'required|date',
+                'date_fin' => 'required|date|after_or_equal:date_debut',
+                'lieu' => 'nullable|string|max:255',
+                'capacite_max' => 'nullable|integer|min:1',
+                'responsable_id' => 'nullable|integer',
+                'region_id' => 'nullable|integer',
+                'filiere_id' => 'nullable|integer',
+            ]);
+            
+            // Set default status if not provided
+            $validatedData['statut'] = $request->input('statut', 'en_attente_validation');
+            
+            // Handle image upload
+            if ($request->hasFile('image')) {
+                $image = $request->file('image');
+                $imageName = time() . '.' . $image->getClientOriginalExtension();
+                $image->move(public_path('images/formations'), $imageName);
+                $validatedData['image'] = '/images/formations/' . $imageName;
+            }
+            
+            // Create new formation in database
+            $formation = \App\Models\Formation::create($validatedData);
+            
+            // Return success response with the created formation
+            return response()->json([
+                'message' => 'Formation créée avec succès',
+                'data' => $formation
+            ], 201);
+        } catch (\Exception $e) {
+            // Log the error for debugging
+            \Log::error('Error creating formation: ' . $e->getMessage());
+            
+            // Return error response
+            return response()->json([
+                'message' => 'Erreur lors de la création de la formation',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     });
     
     // Other endpoints needed for the profile page as temporary placeholders
@@ -179,6 +275,13 @@ Route::middleware('auth:sanctum')->get('/stats', function () {
 // Handle CORS preflight OPTIONS requests
 Route::options('/admin/dashboard-stats', function () {
     return response()->json(['status' => 'success']);
+});
+
+// Handle CORS preflight OPTIONS requests for login
+Route::options('/login', function () {
+    return response()->json(['status' => 'success'], 200)
+        ->header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        ->header('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Token, Origin, Authorization');
 });
 
 // Authentication routes
@@ -446,5 +549,462 @@ Route::prefix('responsable-cdc')->group(function () {
     Route::get('/formateur-animateur', [GereFormationController::class, 'getFormateurAnimateurs']);
     Route::post('/formateur-animateur', [GereFormationController::class, 'assignFormateurAnimateur']);
     Route::delete('/formateur-animateur/{id}', [GereFormationController::class, 'removeFormateurAnimateur']);
+});
+
+// Add authenticated routes for ResponsableFormation
+Route::middleware(['auth:sanctum'])->prefix('responsable-formation')->group(function () {
+    // Formations CRUD operations
+    Route::apiResource('formations', \App\Http\Controllers\Api\ResponsableFormation\FormationsController::class);
+    
+    // ... other routes ...
+});
+
+// Public routes for creating formations without authentication (temporary for development)
+Route::post('/create-formation', function(Request $request) {
+    try {
+        \Log::info('Received formation creation request with data: ' . json_encode($request->all()));
+        
+        // Validate the incoming request
+        $validatedData = $request->validate([
+            'titre' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'date_debut' => 'required|date',
+            'date_fin' => 'required|date|after_or_equal:date_debut',
+            'lieu' => 'nullable|string|max:255',
+            'capacite_max' => 'nullable|integer|min:1',
+            'responsable_id' => 'nullable',
+            'region_id' => 'nullable',
+            'filiere_id' => 'nullable',
+        ]);
+        
+        \Log::info('Validation passed');
+        
+        // Set default status if not provided
+        $validatedData['statut'] = $request->input('statut', 'en_attente_validation');
+        
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            try {
+                $image = $request->file('image');
+                $imageName = time() . '.' . $image->getClientOriginalExtension();
+                $image->move(public_path('images/formations'), $imageName);
+                $validatedData['image'] = '/images/formations/' . $imageName;
+                \Log::info('Image uploaded successfully: ' . $imageName);
+            } catch (\Exception $imageError) {
+                \Log::error('Image upload failed: ' . $imageError->getMessage());
+                // Continue without the image rather than failing
+            }
+        }
+        
+        // Make sure region_id and filiere_id are integers if provided
+        if (!empty($validatedData['region_id'])) {
+            $validatedData['region_id'] = (int)$validatedData['region_id'];
+            \Log::info('Region ID set to: ' . $validatedData['region_id']);
+        } else {
+            // Remove if empty to avoid foreign key constraint issues
+            unset($validatedData['region_id']);
+            \Log::info('Region ID removed from request');
+        }
+        
+        if (!empty($validatedData['filiere_id'])) {
+            $validatedData['filiere_id'] = (int)$validatedData['filiere_id'];
+            \Log::info('Filiere ID set to: ' . $validatedData['filiere_id']);
+        } else {
+            // Remove if empty to avoid foreign key constraint issues
+            unset($validatedData['filiere_id']);
+            \Log::info('Filiere ID removed from request');
+        }
+        
+        if (!empty($validatedData['responsable_id'])) {
+            $validatedData['responsable_id'] = (int)$validatedData['responsable_id'];
+            \Log::info('Responsable ID set to: ' . $validatedData['responsable_id']);
+        } else {
+            // Set default responsable_id if not provided
+            $validatedData['responsable_id'] = 1;
+            \Log::info('Responsable ID defaulted to 1');
+        }
+        
+        // Try direct DB insertion first to debug
+        try {
+            \Log::info('Attempting direct DB insertion with: ' . json_encode($validatedData));
+            
+            // Check if there are required fields in the formations table schema
+            $requiredFields = ['titre', 'date_debut', 'date_fin', 'statut', 'responsable_id'];
+            $missingFields = [];
+            
+            foreach ($requiredFields as $field) {
+                if (!isset($validatedData[$field]) || $validatedData[$field] === null || $validatedData[$field] === '') {
+                    $missingFields[] = $field;
+                }
+            }
+            
+            if (!empty($missingFields)) {
+                \Log::error('Missing required fields: ' . implode(', ', $missingFields));
+                return response()->json([
+                    'message' => 'Champs obligatoires manquants',
+                    'missing_fields' => $missingFields
+                ], 422);
+            }
+            
+            // Create new formation in database
+            $formation = \App\Models\Formation::create($validatedData);
+            \Log::info('Formation created successfully with ID: ' . $formation->id);
+            
+            // Return success response with the created formation
+            return response()->json([
+                'message' => 'Formation créée avec succès',
+                'data' => $formation
+            ], 201);
+        } catch (\Exception $dbError) {
+            \Log::error('Direct DB insertion failed: ' . $dbError->getMessage());
+            \Log::error('DB Error trace: ' . $dbError->getTraceAsString());
+            
+            // Try with minimal required fields as fallback
+            try {
+                \Log::info('Trying fallback creation with minimal fields');
+                $minimalData = [
+                    'titre' => $validatedData['titre'],
+                    'description' => $validatedData['description'] ?? 'Formation sans description',
+                    'date_debut' => $validatedData['date_debut'],
+                    'date_fin' => $validatedData['date_fin'],
+                    'statut' => 'en_attente_validation',
+                    'responsable_id' => 1,
+                ];
+                
+                $formation = \App\Models\Formation::create($minimalData);
+                
+                \Log::info('Formation created with minimal data, ID: ' . $formation->id);
+                return response()->json([
+                    'message' => 'Formation créée avec succès (données minimales)',
+                    'data' => $formation,
+                    'note' => 'Certains champs ont été omis en raison d\'erreurs de validation'
+                ], 201);
+            } catch (\Exception $fallbackError) {
+                \Log::error('Fallback creation also failed: ' . $fallbackError->getMessage());
+                throw $fallbackError;
+            }
+        }
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        \Log::error('Validation error creating formation: ' . json_encode($e->errors()));
+        return response()->json([
+            'message' => 'Erreur de validation lors de la création de la formation',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\PDOException $e) {
+        \Log::error('Database error creating formation: ' . $e->getMessage());
+        \Log::error('SQL Error: ' . $e->getMessage());
+        
+        return response()->json([
+            'message' => 'Erreur de base de données lors de la création de la formation',
+            'error' => $e->getMessage(),
+            'error_code' => $e->getCode()
+        ], 500);
+    } catch (\Exception $e) {
+        \Log::error('Error creating formation: ' . $e->getMessage());
+        \Log::error('Error trace: ' . $e->getTraceAsString());
+        
+        // Return error response with more details
+        return response()->json([
+            'message' => 'Erreur lors de la création de la formation',
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'code' => $e->getCode()
+        ], 500);
+    }
+});
+
+// Add a special endpoint for direct formation creation via GET (only for testing)
+Route::get('/direct-create-formation', function(Request $request) {
+    try {
+        \Log::info('Received direct formation creation request: ' . json_encode($request->query()));
+        
+        // Extract data from query parameters
+        $titre = $request->query('titre', 'Formation Test ' . date('Y-m-d H:i:s'));
+        $description = $request->query('description', 'Formation créée pour tester l\'API');
+        $date_debut = $request->query('date_debut', '2025-06-01');
+        $date_fin = $request->query('date_fin', '2025-06-30');
+        $lieu = $request->query('lieu', 'Casablanca');
+        $capacite_max = (int) $request->query('capacite_max', 25);
+        $responsable_id = (int) $request->query('responsable_id', 1);
+        $region_id = (int) $request->query('region_id', 2);
+        $filiere_id = (int) $request->query('filiere_id', 3);
+        
+        // Ensure proper casting of values and handle empty strings
+        if (empty($region_id) || $region_id <= 0) {
+            $region_id = 2; // Default region_id
+            \Log::info('Using default region_id: 2');
+        }
+        
+        if (empty($filiere_id) || $filiere_id <= 0) {
+            $filiere_id = 3; // Default filiere_id
+            \Log::info('Using default filiere_id: 3');
+        }
+        
+        if (empty($responsable_id) || $responsable_id <= 0) {
+            $responsable_id = 1; // Default responsable_id
+            \Log::info('Using default responsable_id: 1');
+        }
+        
+        $formationData = [
+            'titre' => $titre,
+            'description' => $description,
+            'date_debut' => $date_debut,
+            'date_fin' => $date_fin,
+            'lieu' => $lieu,
+            'capacite_max' => $capacite_max,
+            'statut' => 'en_attente_validation',
+            'responsable_id' => $responsable_id,
+            'region_id' => $region_id,
+            'filiere_id' => $filiere_id,
+        ];
+        
+        \Log::info('Attempting to create formation with data: ' . json_encode($formationData));
+        
+        // Directly check DB connection first
+        try {
+            $testConnection = \DB::connection()->getPdo();
+            \Log::info('Database connection successful: ' . \DB::connection()->getDatabaseName());
+        } catch (\Exception $dbConnError) {
+            \Log::error('Database connection failed: ' . $dbConnError->getMessage());
+            throw new \Exception('Cannot connect to database: ' . $dbConnError->getMessage());
+        }
+        
+        // Insert directly into database
+        $formation = \App\Models\Formation::create($formationData);
+        
+        \Log::info('Formation created successfully via direct-create with ID: ' . $formation->id);
+        
+        return response()->json([
+            'message' => 'Formation créée avec succès via direct-create',
+            'data' => $formation
+        ], 201);
+    } catch (\Exception $e) {
+        \Log::error('Error in direct-create-formation: ' . $e->getMessage());
+        \Log::error('Error trace: ' . $e->getTraceAsString());
+        
+        // Attempt alternative creation with minimal data
+        try {
+            \Log::info('Trying alternative creation with minimal data');
+            $fallbackData = [
+                'titre' => $request->query('titre', 'Formation de secours ' . date('Y-m-d H:i:s')),
+                'description' => 'Formation créée après échec - ' . date('Y-m-d H:i:s'),
+                'date_debut' => '2025-06-01',
+                'date_fin' => '2025-06-30',
+                'statut' => 'en_attente_validation',
+                'responsable_id' => 1
+            ];
+            
+            $fallbackFormation = \App\Models\Formation::create($fallbackData);
+            
+            \Log::info('Fallback formation created with ID: ' . $fallbackFormation->id);
+            
+            return response()->json([
+                'message' => 'Formation de secours créée après erreur',
+                'data' => $fallbackFormation,
+                'original_error' => $e->getMessage()
+            ], 201);
+        } catch (\Exception $fallbackError) {
+            \Log::error('Fallback creation also failed: ' . $fallbackError->getMessage());
+            
+            return response()->json([
+                'message' => 'Échec de création de formation (tentatives multiples)',
+                'error' => $e->getMessage(),
+                'fallback_error' => $fallbackError->getMessage(),
+                'debug_info' => [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => explode("\n", $e->getTraceAsString(), 5)[0]
+                ]
+            ], 500);
+        }
+    }
+});
+
+// Test route for creating a formation directly via API
+Route::get('/test-create-formation', function () {
+    try {
+        // First, find a valid ResponsableFormation record
+        $responsable = \App\Models\ResponsableFormation::first();
+        
+        if (!$responsable) {
+            // If no responsable formation record exists, create one
+            // First get or create a user with responsable_formation role
+            $role = \App\Models\Role::where('name', 'responsable_formation')->first();
+            
+            if (!$role) {
+                // Create the role if it doesn't exist
+                $role = \App\Models\Role::create(['name' => 'responsable_formation']);
+            }
+            
+            $user = \App\Models\User::firstOrCreate(
+                ['email' => 'responsable@example.com'],
+                [
+                    'name' => 'Responsable Formation',
+                    'email' => 'responsable@example.com',
+                    'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                    'role_id' => $role->id
+                ]
+            );
+            
+            // Create the responsable formation entry
+            $responsable = \App\Models\ResponsableFormation::create([
+                'user_id' => $user->id,
+                'departement' => 'Département de Formation',
+                'date_debut_fonction' => now(),
+                'description' => 'Responsable des formations OFPPT'
+            ]);
+            
+            \Log::info('Created new ResponsableFormation with ID: ' . $responsable->id);
+        }
+        
+        // Create default images directory if it doesn't exist
+        $formationsImgDir = public_path('images/formations');
+        if (!file_exists($formationsImgDir)) {
+            mkdir($formationsImgDir, 0755, true);
+            \Log::info('Created formations images directory: ' . $formationsImgDir);
+        }
+        
+        // Copy default image if it doesn't exist
+        $defaultImagePath = public_path('logo-ofppt-1.jpg');
+        if (!file_exists($defaultImagePath)) {
+            // Try to copy from React public directory
+            $reactLogoPath = base_path('../react/public/logo-ofppt-1.jpg');
+            if (file_exists($reactLogoPath)) {
+                copy($reactLogoPath, $defaultImagePath);
+                \Log::info('Copied default logo from React to Laravel public directory');
+            }
+        }
+        
+        // Create a formation with minimal data
+        $formation = \App\Models\Formation::create([
+            'titre' => 'Formation Test via API ' . date('Y-m-d H:i:s'),
+            'description' => 'Formation créée via une route API pour tester la création',
+            'date_debut' => '2025-06-01',
+            'date_fin' => '2025-06-30',
+            'statut' => 'validee', // Changed to validee (confirmed) instead of en_attente_validation
+            'responsable_id' => $responsable->id, // Use the found or created responsable's ID
+            'lieu' => 'Test Location',
+            'capacite_max' => 25,
+            'region_id' => 2,
+            'filiere_id' => 3,
+            'image' => '/logo-ofppt-1.jpg' // Default image path
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Formation créée avec succès via API',
+            'formation' => $formation,
+            'image_url' => asset($formation->image),
+            'responsable_info' => [
+                'id' => $responsable->id,
+                'user_id' => $responsable->user_id,
+                'departement' => $responsable->departement
+            ]
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur lors de la création de la formation',
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'line' => $e->getLine(),
+            'file' => $e->getFile()
+        ], 500);
+    }
+});
+
+// Database repair endpoint via API
+Route::get('/fix-database', function () {
+    $results = [
+        'checks' => [],
+        'fixes' => [],
+        'status' => 'success'
+    ];
+    
+    try {
+        // Check database connection
+        try {
+            $connection = DB::connection()->getPdo();
+            $results['checks'][] = [
+                'name' => 'database_connection',
+                'status' => 'success',
+                'message' => 'Connected to database: ' . DB::connection()->getDatabaseName()
+            ];
+        } catch (\Exception $e) {
+            $results['checks'][] = [
+                'name' => 'database_connection',
+                'status' => 'failure',
+                'message' => 'Failed to connect to database',
+                'error' => $e->getMessage()
+            ];
+            $results['status'] = 'failure';
+            return response()->json($results);
+        }
+        
+        // Check if formations table exists
+        if (!Schema::hasTable('formations')) {
+            $results['checks'][] = [
+                'name' => 'formations_table',
+                'status' => 'failure',
+                'message' => 'Formations table does not exist'
+            ];
+            
+            // Create formations table
+            try {
+                DB::statement('
+                    CREATE TABLE IF NOT EXISTS formations (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        titre VARCHAR(255) NOT NULL,
+                        description TEXT,
+                        date_debut DATE,
+                        date_fin DATE,
+                        lieu VARCHAR(255),
+                        capacite_max INT DEFAULT 20,
+                        statut VARCHAR(50) DEFAULT "en_attente_validation",
+                        responsable_id INT,
+                        region_id INT,
+                        filiere_id INT,
+                        image VARCHAR(255),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    )
+                ');
+                
+                $results['fixes'][] = [
+                    'name' => 'formations_table',
+                    'status' => 'success',
+                    'message' => 'Created formations table'
+                ];
+            } catch (\Exception $e) {
+                $results['fixes'][] = [
+                    'name' => 'formations_table',
+                    'status' => 'failure',
+                    'message' => 'Failed to create formations table',
+                    'error' => $e->getMessage()
+                ];
+                $results['status'] = 'failure';
+            }
+        } else {
+            $results['checks'][] = [
+                'name' => 'formations_table',
+                'status' => 'success',
+                'message' => 'Formations table exists'
+            ];
+        }
+        
+        return response()->json($results);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'General error in database diagnostic',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+});
+
+// Root API route redirect
+Route::get('/', function () {
+    return redirect('/api/connection-status');
 });
 

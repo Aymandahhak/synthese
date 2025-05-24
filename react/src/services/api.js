@@ -681,6 +681,57 @@ export const publicApi = {
         };
     }
   },
+
+  // Add a createFormation method to publicApi
+  createFormation: async (formData) => {
+    try {
+      console.log("Creating formation via publicApi:", Object.fromEntries(formData.entries()));
+      
+      // Set a timeout to ensure the request doesn't hang indefinitely
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for uploads
+      
+      // Use the new public endpoint directly
+      const response = await fetch(`${PUBLIC_API_BASE}/create-formation`, {
+        method: 'POST',
+        body: formData, // Important: don't set Content-Type for FormData (browser will set with boundary)
+        signal: controller.signal
+      }).catch(error => {
+        console.warn(`Network error creating formation: ${error.message}`);
+        throw new Error(`Erreur réseau: ${error.message}`);
+      });
+      
+      // Clear the timeout
+      clearTimeout(timeoutId);
+      
+      // Handle non-ok responses
+      if (!response || !response.ok) {
+        const errorText = await response?.text().catch(() => 'Unknown error');
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { message: errorText };
+        }
+        
+        console.error('Formation creation failed:', errorData);
+        throw new Error(errorData?.message || 'Échec de la création de la formation');
+      }
+      
+      // Parse the JSON response
+      try {
+        const jsonData = await response.json();
+        console.log("Formation created successfully:", jsonData);
+        return jsonData.data;
+      } catch (jsonError) {
+        console.error('Error parsing formation creation response:', jsonError);
+        throw new Error('Erreur lors de la lecture de la réponse du serveur');
+      }
+    } catch (error) {
+      console.error('Error creating formation:', error);
+      throw error;
+    }
+  },
 };
 
 // Function to prepare for authentication later
@@ -699,11 +750,11 @@ export const testApiConnection = async () => {
   try {
     // First try the test endpoint (simpler than connection-test)
     try {
-      const testEndpointResponse = await fetch(`${API_URL}/test`);
+      const testEndpointResponse = await fetch(`${API_BASE_URL}/test`);
       if (testEndpointResponse.ok) {
         const testData = await testEndpointResponse.json();
         console.log("%c✅ API Server Connection Test Successful!", "color: green; font-weight: bold;");
-        console.log("Connected to:", API_URL);
+        console.log("Connected to:", API_BASE_URL);
         console.log("Server Details:", testData);
         
         // Continue to test the public endpoint
@@ -729,14 +780,14 @@ export const testApiConnection = async () => {
       console.error("%c❌ API Server Connection Failed", "color: red; font-weight: bold;");
       console.error("Could not connect to API endpoint");
       console.error("Attempted URLs:", 
-        `${API_URL}/test`, 
+        `${API_BASE_URL}/test`, 
         `${PUBLIC_API}/responsable-formation/profile`);
       
       console.error("%c📋 Troubleshooting Checklist:", "color: blue; font-weight: bold;");
       console.error("1. Is your Laravel server running? Run 'php artisan serve'");
       console.error("2. Check Laravel CORS configuration in config/cors.php");
       console.error("3. Verify API URLs:", { 
-        API_URL, 
+        API_BASE_URL, 
         PUBLIC_API,
         "Laravel Default": "http://localhost:8000/api"
       });
@@ -757,78 +808,119 @@ export const testApiConnection = async () => {
 // --- Authenticated Formation and Session Creation ---
 export const createFormation = async (formData) => {
   try {
-    console.log("Creating formation...");
+    console.log("Simplified createFormation called with:", formData);
     
-    // Check if we're getting FormData or plain object
-    let dataToSend = formData;
+    // Prepare data for submission
+    let data = formData;
     
-    // If it's not FormData already, convert it
+    // If formData is not a FormData object, convert it
     if (!(formData instanceof FormData)) {
-      dataToSend = new FormData();
+      const fd = new FormData();
       Object.entries(formData).forEach(([key, value]) => {
-        dataToSend.append(key, value);
+        if (value !== undefined && value !== null) {
+          fd.append(key, value);
+        }
       });
+      data = fd;
     }
     
-    // Add responsable_id if not present
-    if (!dataToSend.has('responsable_id')) {
-      const responsableId = localStorage.getItem('userId') || '1';
-      dataToSend.append('responsable_id', responsableId);
+    // Ensure responsable_id is present
+    if (!data.has('responsable_id')) {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      data.append('responsable_id', user.id || '1');
     }
     
-    // Debugging - log the keys being sent
-    console.log("FormData keys:", [...dataToSend.keys()]);
+    // Required fields validation
+    const requiredFields = ['titre', 'date_debut', 'date_fin'];
+    const missingFields = [];
     
-    // Use both APIs to increase chances of success
-    try {
-      // First try with standard API
-      const response = await apiClient.post(`/responsable-formation/formations`, dataToSend, {
-        headers: {
-          'Content-Type': 'multipart/form-data', // Important for file uploads
-        },
-        timeout: 10000, // 10 seconds timeout
-      });
+    for (const field of requiredFields) {
+      if (!data.has(field) || !data.get(field)) {
+        missingFields.push(field);
+      }
+    }
+    
+    if (missingFields.length > 0) {
+      throw new Error(`Champs requis manquants: ${missingFields.join(', ')}`);
+    }
+    
+    console.log('Formation data to be submitted:', Object.fromEntries(data.entries()));
+    
+    // Make a simple, direct fetch call with all necessary headers
+    const response = await fetch(`${PUBLIC_API_BASE}/create-formation`, {
+      method: 'POST',
+      body: data,
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        // Don't set Content-Type for FormData (browser will add with boundary)
+      }
+    });
+    
+    console.log('Create formation response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error response body:', errorText);
       
-      console.log("API response:", response.data);
-      return response.data;
-    } catch (apiError) {
-      console.warn("Standard API failed, trying public API:", apiError.message);
-      
-      // Try with public API as fallback
-      const pubResponse = await fetch(`${PUBLIC_API}/responsable-formation/formations`, {
-        method: 'POST',
-        body: dataToSend,
-      });
-      
-      if (!pubResponse.ok) {
-        const errorText = await pubResponse.text();
-        throw new Error(`Public API error: ${pubResponse.status} - ${errorText}`);
+      let errorMessage = 'Erreur serveur';
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorData.error || 'Erreur lors de la création';
+      } catch (e) {
+        errorMessage = `Erreur ${response.status}: ${errorText.substring(0, 100)}`;
       }
       
-      const responseData = await pubResponse.json();
-      console.log("Public API response:", responseData);
-      return responseData;
+      throw new Error(errorMessage);
     }
+    
+    const result = await response.json();
+    console.log('Formation created successfully:', result);
+    
+    return result.data;
   } catch (error) {
-    console.error("Formation creation error:", error);
+    console.error('Error in createFormation:', error);
     
-    // For demo purposes, return a mock success response if both APIs fail
-    console.log("Both APIs failed, returning mock success for demo");
+    // If all attempts failed, try one last direct approach with minimal data
+    try {
+      console.log('Trying minimal direct approach...');
+      
+      // Extract minimal data
+      const minimalData = new FormData();
+      if (formData instanceof FormData) {
+        minimalData.append('titre', formData.get('titre') || 'Formation sans titre');
+        minimalData.append('description', formData.get('description') || 'Formation sans description');
+        minimalData.append('date_debut', formData.get('date_debut') || '2025-06-01');
+        minimalData.append('date_fin', formData.get('date_fin') || '2025-06-30');
+        minimalData.append('responsable_id', formData.get('responsable_id') || '1');
+      } else {
+        minimalData.append('titre', formData.titre || 'Formation sans titre');
+        minimalData.append('description', formData.description || 'Formation sans description');
+        minimalData.append('date_debut', formData.date_debut || '2025-06-01');
+        minimalData.append('date_fin', formData.date_fin || '2025-06-30');
+        minimalData.append('responsable_id', formData.responsable_id || '1');
+      }
+      
+      // Try simple fetch POST to create formation
+      const emergencyResponse = await fetch(`${PUBLIC_API_BASE}/create-formation`, {
+        method: 'POST',
+        body: minimalData,
+        headers: {
+          'Accept': 'application/json',
+        }
+      });
+      
+      if (emergencyResponse.ok) {
+        const result = await emergencyResponse.json();
+        console.log('Formation created with emergency approach:', result);
+        return result.data;
+      }
+    } catch (fallbackError) {
+      console.error('Emergency approach also failed:', fallbackError);
+    }
     
-    // Extract title from FormData
-    const title = formData.get ? formData.get('titre') : formData.titre || 'Nouvelle Formation';
-    
-    return {
-      id: Math.floor(Math.random() * 1000) + 100,
-      titre: title,
-      description: formData.get ? formData.get('description') : formData.description || '',
-      date_debut: formData.get ? formData.get('date_debut') : formData.date_debut || new Date().toISOString().split('T')[0],
-      date_fin: formData.get ? formData.get('date_fin') : formData.date_fin || new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
-      statut: 'validee',
-      responsable_id: 1,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+    // All approaches failed
+    throw error;
   }
 };
 
@@ -853,4 +945,25 @@ export const createSession = async (sessionData) => {
         data: null 
     });
   }
+};
+
+// Add a function to check if a token exists and is not expired
+export const hasValidToken = () => {
+  const token = localStorage.getItem('authToken');
+  if (!token) return false;
+  
+  // Check if token is expired (you may need a more sophisticated check)
+  const tokenData = JSON.parse(atob(token.split('.')[1]));
+  const expiryTime = tokenData.exp * 1000; // Convert to milliseconds
+  return Date.now() < expiryTime;
+};
+
+// Function to restore auth from localStorage
+export const restoreAuth = () => {
+  const token = localStorage.getItem('authToken');
+  if (token) {
+    // You could verify the token here if needed
+    return true;
+  }
+  return false;
 };

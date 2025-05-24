@@ -1,12 +1,14 @@
 <?php
 
-namespace App\Http\Controllers\Api\Responsable;
+namespace App\Http\Controllers\Api\ResponsableFormation;
 
 use App\Http\Controllers\Controller;
 use App\Models\Formation;
 use Illuminate\Http\Request;
-use App\Http\Resources\FormationResource; // Create using: php artisan make:resource FormationResource
-use Illuminate\Support\Facades\Auth; // Import Auth facade
+use App\Http\Resources\FormationResource;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class FormationsController extends Controller
 {
@@ -15,17 +17,23 @@ class FormationsController extends Controller
      */
     public function index(Request $request)
     {
-        $responsableId = Auth::id();
-        // Add logic to fetch formations, potentially filtered or paginated
-        // Assuming a 'responsable_id' foreign key exists on the Formation model
-        // $formations = Formation::where('responsable_id', $responsableId)
-        //                    ->latest()
-        //                    ->paginate(10);
-        
-        // TEMPORARY: Remove ownership filter if 'responsable_id' doesn't exist yet
-        $formations = Formation::latest()->paginate(10);
-        
-        return FormationResource::collection($formations);
+        try {
+            // Get all formations
+            $formations = Formation::orderBy('created_at', 'desc')->get();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Liste des formations récupérée avec succès',
+                'data' => $formations
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching formations: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération des formations',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -33,81 +41,156 @@ class FormationsController extends Controller
      */
     public function store(Request $request)
     {
-        $responsableId = Auth::id();
-        
-        // TODO: Update validation rules based on your Formation model fields
+        try {
+            // Validate the request data
         $validatedData = $request->validate([
-            'titre' => 'required|string|max:255', // Example field, rename if needed
+                'titre' => 'required|string|max:255',
             'description' => 'nullable|string',
-            // 'date_debut' => 'required|date',
-            // 'date_fin' => 'required|date|after_or_equal:date_debut',
-            // 'statut' => 'required|in:planifiée,validée,terminée', 
-        ]);
-
-        // Add the responsable_id before creating
-        // $validatedData['responsable_id'] = $responsableId; 
-
-        // TEMPORARY: Remove 'responsable_id' if the field doesn't exist yet
+                'date_debut' => 'required|date',
+                'date_fin' => 'required|date|after_or_equal:date_debut',
+                'lieu' => 'nullable|string|max:255',
+                'capacite_max' => 'nullable|integer|min:1',
+                'responsable_id' => 'nullable|integer',
+                'region_id' => 'nullable|integer',
+                'filiere_id' => 'nullable|integer',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120', // 5MB max
+            ]);
+            
+            // Set default status if not provided
+            $validatedData['statut'] = $request->input('statut', 'en_attente_validation');
+            
+            // Handle image upload
+            if ($request->hasFile('image')) {
+                $image = $request->file('image');
+                $imageName = time() . '_' . $image->getClientOriginalName();
+                
+                // Store the image in the public directory
+                $image->move(public_path('images/formations'), $imageName);
+                $validatedData['image'] = '/images/formations/' . $imageName;
+            }
+            
+            // Create the formation
         $formation = Formation::create($validatedData);
 
-        // Load the relationship if it exists and is needed in the response
-        // $formation->load('responsable'); 
-
-        return response()->json(new FormationResource($formation), 201); // Return 201 Created status
+            return response()->json([
+                'success' => true,
+                'message' => 'Formation créée avec succès',
+                'data' => $formation
+            ], 201);
+        } catch (\Exception $e) {
+            Log::error('Error creating formation: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la création de la formation',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
-     * Display the specified resource. Add ownership check if needed.
+     * Display the specified formation.
      */
-    public function show(Formation $formation)
+    public function show($id)
     {
-        // Optional: Add ownership check if only the owner can view
-        // if ($formation->responsable_id !== Auth::id()) {
-        //     return response()->json(['message' => 'Unauthorized'], 403);
-        // }
-        // $formation->load('responsable'); 
-        return new FormationResource($formation);
+        try {
+            $formation = Formation::findOrFail($id);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $formation
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching formation: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Formation non trouvée',
+                'error' => $e->getMessage()
+            ], 404);
+        }
     }
 
     /**
-     * Update the specified resource in storage. Add ownership check.
+     * Update the specified formation.
      */
-    public function update(Request $request, Formation $formation)
+    public function update(Request $request, $id)
     {
-         // Ensure the authenticated user owns this formation
-         // if ($formation->responsable_id !== Auth::id()) {
-         //    return response()->json(['message' => 'Unauthorized'], 403);
-         // }
-         
-         // TODO: Update validation rules based on your Formation model fields
+        try {
+            $formation = Formation::findOrFail($id);
+            
+            // Validate the request data
          $validatedData = $request->validate([
             'titre' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
-            // 'date_debut' => 'sometimes|required|date',
-            // 'date_fin' => 'sometimes|required|date|after_or_equal:date_debut',
-            // 'statut' => 'sometimes|required|in:planifiée,validée,terminée', 
-        ]);
-
+                'date_debut' => 'sometimes|required|date',
+                'date_fin' => 'sometimes|required|date|after_or_equal:date_debut',
+                'lieu' => 'nullable|string|max:255',
+                'capacite_max' => 'nullable|integer|min:1',
+                'statut' => 'nullable|string|in:en_attente_validation,validee,rejetee,terminee',
+                'region_id' => 'nullable|integer',
+                'filiere_id' => 'nullable|integer',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120', // 5MB max
+            ]);
+            
+            // Handle image upload
+            if ($request->hasFile('image')) {
+                // Delete old image if it exists
+                if ($formation->image && file_exists(public_path($formation->image))) {
+                    unlink(public_path($formation->image));
+                }
+                
+                $image = $request->file('image');
+                $imageName = time() . '_' . $image->getClientOriginalName();
+                
+                // Store the image in the public directory
+                $image->move(public_path('images/formations'), $imageName);
+                $validatedData['image'] = '/images/formations/' . $imageName;
+            }
+            
+            // Update the formation
         $formation->update($validatedData);
-        // $formation->load('responsable'); 
-
-        return new FormationResource($formation);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Formation mise à jour avec succès',
+                'data' => $formation
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error updating formation: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la mise à jour de la formation',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
-     * Remove the specified resource from storage. Add ownership check.
+     * Remove the specified formation.
      */
-    public function destroy(Formation $formation)
+    public function destroy($id)
     {
-        // Ensure the authenticated user owns this formation
-        // if ($formation->responsable_id !== Auth::id()) {
-        //     return response()->json(['message' => 'Unauthorized'], 403);
-        // }
-        
+        try {
+            $formation = Formation::findOrFail($id);
+            
+            // Delete the image file if it exists
+            if ($formation->image && file_exists(public_path($formation->image))) {
+                unlink(public_path($formation->image));
+            }
+            
+            // Delete the formation
         $formation->delete();
 
-        // Consider what associated data might need cleanup (e.g., sessions linked to this formation)
-
-        return response()->json(null, 204); // Return 204 No Content status
+            return response()->json([
+                'success' => true,
+                'message' => 'Formation supprimée avec succès'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error deleting formation: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la suppression de la formation',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }

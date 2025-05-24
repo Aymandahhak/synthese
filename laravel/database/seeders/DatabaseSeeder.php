@@ -91,16 +91,16 @@ class DatabaseSeeder extends Seeder
 
         // Seed regions if they don't exist
         $regions = [
-            ['name' => 'Casablanca-Settat', 'code' => 'CS'],
-            ['name' => 'Rabat-Salé-Kénitra', 'code' => 'RSK'],
-            ['name' => 'Marrakech-Safi', 'code' => 'MS'],
-            ['name' => 'Fès-Meknès', 'code' => 'FM'],
-            ['name' => 'Tanger-Tétouan-Al Hoceima', 'code' => 'TTA'],
+            ['nom' => 'Casablanca-Settat', 'code' => 'CS'],
+            ['nom' => 'Rabat-Salé-Kénitra', 'code' => 'RSK'],
+            ['nom' => 'Marrakech-Safi', 'code' => 'MS'],
+            ['nom' => 'Fès-Meknès', 'code' => 'FM'],
+            ['nom' => 'Tanger-Tétouan-Al Hoceima', 'code' => 'TTA'],
         ];
 
         foreach ($regions as $region) {
             Region::firstOrCreate(
-                ['name' => $region['name']],
+                ['nom' => $region['nom']],
                 ['code' => $region['code'], 'active' => true]
             );
         }
@@ -127,6 +127,7 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class, // Keep if you have a separate UserSeeder
             SessionFormationSeeder::class,
             FeedbackSeeder::class,
+            ResponsableFormationSeeder::class, // Add ResponsableFormation seeder
             // Add other seeders here if needed
         ]);
     }
